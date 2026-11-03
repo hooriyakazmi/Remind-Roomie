@@ -1,0 +1,154 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Remind Roomie</title>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<header>
+    <h1>Remind Roomie</h1>
+    <span class="notification">🔔</span>
+</header>
+
+<main>
+
+    <!-- Greeting -->
+    <section class="greeting">
+        <h2>Good evening, Dan 👋</h2>
+        <p id="household-name">Welcome back!</p>
+    </section>
+
+    <!-- Household Progress -->
+    <section class="progress-card">
+        <h3>Household Progress</h3>
+
+        <div class="progress-number" id="progress-percentage">
+            0%
+        </div>
+
+        <p id="progress-count">0 of 0 tasks completed</p>
+
+        <p class="success" id="progress-message">
+            Keep up the great work!
+        </p>
+    </section>
+
+    <!-- Quick Actions -->
+    <section>
+        <h3>Quick Actions</h3>
+
+        <div class="action-container">
+
+            <button onclick="createTask()">
+                + Create Task
+            </button>
+
+            <button onclick="createEvent()">
+                + Create Event
+            </button>
+
+        </div>
+    </section>
+
+    <!-- Upcoming Tasks -->
+    <section>
+        <h3>Upcoming Tasks</h3>
+
+        <div id="task-list">
+            <!-- Tasks will be loaded dynamically from Flutter -->
+        </div>
+    </section>
+
+</main>
+
+<script>
+
+    // Receives household information and tasks from Flutter
+    function loadHouseholdData(data) {
+
+        // Update household name
+        document.getElementById("household-name").textContent =
+            "Welcome to " + data.householdName + "!";
+
+        // Calculate household progress
+        const total = data.tasks.length;
+
+        const completed = data.tasks.filter(
+            task => task.completed
+        ).length;
+
+        const percentage = total === 0
+            ? 0
+            : Math.round((completed / total) * 100);
+
+        // Update progress information
+        document.getElementById("progress-percentage").textContent =
+            percentage + "%";
+
+        document.getElementById("progress-count").textContent =
+            `${completed} of ${total} tasks completed`;
+
+        document.getElementById("progress-message").textContent =
+            percentage === 100
+                ? "Amazing! All tasks are completed!"
+                : "Keep up the great work!";
+
+        // Get the task container
+        const taskList = document.getElementById("task-list");
+
+        // Clear existing tasks
+        taskList.innerHTML = "";
+
+        // Display tasks from Flutter
+        data.tasks.forEach(task => {
+
+            const card = document.createElement("div");
+            card.className = "task-card";
+
+            if (task.completed) {
+                card.classList.add("completed");
+            }
+
+            // Task title
+            const title = document.createElement("h4");
+            title.textContent = task.title;
+
+            // Assigned household member
+            const assigned = document.createElement("p");
+            assigned.textContent = "Assigned to: " + task.assignedTo;
+
+            // Due date or completion status
+            const due = document.createElement("span");
+            due.textContent = task.completed
+                ? "Completed"
+                : task.due;
+
+            // Add information to the task card
+            card.append(title, assigned, due);
+
+            taskList.appendChild(card);
+        });
+    }
+
+    // Quick Action buttons
+    function createTask() {
+        alert("Create Task clicked!");
+    }
+
+    function createEvent() {
+        alert("Create Event clicked!");
+    }
+
+</script>
+
+</body>
+</html>
