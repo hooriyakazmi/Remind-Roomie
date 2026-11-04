@@ -49,14 +49,19 @@ const householdData = {
             initials: "D"
         },
         {
-            name: "Sarah",
-            role: "Sister",
-            initials: "S"
+            name: "George",
+            role: "Father",
+            initials: "G"
         },
         {
-            name: "Jane",
+            name: "Nadia",
+            role: "Sister",
+            initials: "N"
+        },
+        {
+            name: "Rubina",
             role: "Mother",
-            initials: "J"
+            initials: "R"
         }
     ]
 };

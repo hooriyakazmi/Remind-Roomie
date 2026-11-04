@@ -65,13 +65,13 @@ button {
 }
 
 .notification-button {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border: none;
     border-radius: 50%;
     background-color: #17675b;
     color: white;
-    font-size: 15px;
+    font-size: 24px;
 }
 
 .progress-card {
@@ -138,27 +138,38 @@ button {
     background-color: white;
     border-radius: 20px;
     padding: 15px;
-    display: flex;
     justify-content: space-between;
     flex-direction: column;
     text-decoration: none;
     color: black;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-content: start;
+   
 }
 
 .action-card h3 {
     font-size: 15px;
-    line-height: 17px;
+    line-height: 34px;
+    grid-column: 1;
+    grid-row: 1;
 }
 
 .action-card p {
     font-size: 9px;
     color: #777;
+    grid-column: 1;
+    grid-row: 2;
 }
 
 .action-icon {
     color: #17675b;
     font-size: 23px;
     align-self: flex-end;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
 }
 
 .events-section {
