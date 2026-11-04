@@ -1,0 +1,462 @@
+
+/* GENERAL STYLES */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #f4f1f1;
+    color: #080808;
+    min-height: 100vh;
+}
+
+button {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+/* ==============================
+   HOME PAGE
+============================== */
+
+.home-container {
+    width: 100%;
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 38px 19px 100px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding: 0 4px;
+}
+
+.profile-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.profile-avatar {
+    width: 42px;
+    height: 42px;
+    background-color: #ffcc00;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 26px;
+}
+
+.welcome-text p {
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.welcome-text h2 {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.notification-button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background-color: #17675b;
+    color: white;
+    font-size: 15px;
+}
+
+.progress-card {
+    width: 100%;
+    min-height: 97px;
+    background-color: #aee4ed;
+    border-radius: 19px;
+    padding: 15px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+}
+
+.progress-info h3 {
+    font-size: 20px;
+    line-height: 22px;
+    margin-bottom: 5px;
+}
+
+.date {
+    font-size: 9px;
+    margin-bottom: 7px;
+}
+
+#taskProgress {
+    font-size: 10px;
+}
+
+.progress-ring {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.progress-inner {
+    width: 47px;
+    height: 47px;
+    background-color: #aee4ed;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.progress-inner span {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 21px;
+}
+
+.action-card {
+    height: 94px;
+    background-color: white;
+    border-radius: 20px;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
+    text-decoration: none;
+    color: black;
+}
+
+.action-card h3 {
+    font-size: 15px;
+    line-height: 17px;
+}
+
+.action-card p {
+    font-size: 9px;
+    color: #777;
+}
+
+.action-icon {
+    color: #17675b;
+    font-size: 23px;
+    align-self: flex-end;
+}
+
+.events-section {
+    background-color: white;
+    border-radius: 20px;
+    padding: 13px 11px 10px;
+    min-height: 100px;
+}
+
+.events-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 4px 14px;
+}
+
+.events-header h3 {
+    font-size: 13px;
+}
+
+.today-button {
+    background-color: #eeeeee;
+    border: none;
+    border-radius: 20px;
+    padding: 5px 10px;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+#homeEvents .event-card {
+    background-color: #f7dafa;
+    width: 100%;
+    min-height: 44px;
+    border-radius: 13px;
+    padding: 8px 7px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 8px;
+}
+
+.event-avatar {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    background-color: #e8bfe9;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.event-details {
+    flex: 1;
+}
+
+.event-details h4 {
+    font-size: 11px;
+    margin-bottom: 3px;
+}
+
+.event-details p {
+    font-size: 9px;
+    color: #777;
+}
+
+/* ==============================
+   OTHER PAGES
+============================== */
+
+.container {
+    width: 100%;
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 35px 19px 100px;
+}
+
+/* Page headers */
+
+.page-header {
+    margin-bottom: 25px;
+}
+
+.page-header h1,
+.page-header .page-title {
+    font-size: 23px;
+    font-weight: 700;
+}
+
+.page-header p {
+    color: #777;
+    font-size: 13px;
+    margin-top: 7px;
+}
+
+/* Section headings */
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.section-heading h2,
+.section-heading h3 {
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.section-heading a {
+    text-decoration: none;
+    color: #17675b;
+    font-size: 13px;
+}
+
+/* ==============================
+   TASKS PAGE
+============================== */
+
+.task-card {
+    background-color: white;
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.task-avatar {
+    width: 39px;
+    height: 39px;
+    min-width: 39px;
+    border-radius: 50%;
+    background-color: #e7d9f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.task-info {
+    flex: 1;
+}
+
+.task-info h4,
+.task-info strong {
+    font-size: 14px;
+}
+
+.task-info p {
+    font-size: 12px;
+    color: #777;
+    margin-top: 5px;
+}
+
+.status {
+    font-size: 11px;
+    background-color: #d5eee2;
+    color: #316c56;
+    padding: 6px 9px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.status.pending {
+    background-color: #fff0cc;
+    color: #956a19;
+}
+
+.status.completed {
+    background-color: #d5eee2;
+    color: #316c56;
+}
+
+/* ==============================
+   CALENDAR PAGE
+============================== */
+
+#calendarEvents .event-card {
+    background-color: white;
+    width: 100%;
+    min-height: 65px;
+    border-radius: 15px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+#calendarEvents .event-avatar {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    background-color: #f7dafa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+#calendarEvents .event-details h4 {
+    font-size: 13px;
+}
+
+#calendarEvents .event-details p {
+    font-size: 11px;
+}
+
+/* ==============================
+   FAMILY PAGE
+============================== */
+
+#familyList .task-card {
+    background-color: white;
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 12px;
+}
+
+#familyList .task-avatar {
+    background-color: #e7d9f5;
+}
+
+/* ==============================
+   BOTTOM NAVIGATION
+   SAME ON ALL FOUR PAGES
+============================== */
+
+.bottom-nav {
+    position: fixed;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 26px);
+    max-width: 405px;
+    height: 48px;
+    border-radius: 19px;
+    background-color: #337c6e;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 4px 10px;
+    z-index: 100;
+}
+
+.bottom-nav a {
+    flex: 1;
+    height: 38px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: white;
+    text-decoration: none;
+    font-size: 11px;
+    opacity: 0.85;
+    border-radius: 11px;
+}
+
+.bottom-nav a span {
+    display: block;
+    font-size: 21px;
+    line-height: 23px;
+}
+
+.bottom-nav a.active {
+    background-color: #176353;
+    opacity: 1;
+    font-weight: bold;
+}
+
+/* ==============================
+   RESPONSIVE DESIGN
+============================== */
+
+@media (max-width: 350px) {
+    .home-container,
+    .container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .progress-card {
+        padding: 15px 12px;
+    }
+
+    .page-header h1 {
+        font-size: 21px;
+    }
+
+    .task-card {
+        padding: 12px;
+    }
+}

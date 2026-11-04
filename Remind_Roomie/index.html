@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remind Roomie - Home</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <main class="home-container">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="profile-section">
+                <div class="profile-avatar" id="profileAvatar"></div>
+
+                <div class="welcome-text">
+                    <p id="greeting"></p>
+                    <h2 id="userName"></h2>
+                </div>
+            </div>
+
+            <button class="notification-button" aria-label="Notifications">
+                🔔
+            </button>
+        </header>
+
+
+        <!-- Today's Progress -->
+        <section class="progress-card">
+
+            <div class="progress-info">
+                <p id="currentDate"></p>
+                <h3>Today's Tasks</h3>
+                <p id="taskProgress"></p>
+            </div>
+
+            <div class="progress-ring" id="progressRing">
+                <div class="progress-inner">
+                    <span id="progressPercentage"></span>
+                </div>
+            </div>
+
+        </section>
+
+
+        <!-- Quick Actions -->
+        <section class="quick-actions">
+
+            <a href="tasks.html" class="action-card">
+                <div class="action-icon">＋</div>
+                <h3>Create New Task</h3>
+                <p>Assign a household task</p>
+            </a>
+
+            <a href="family.html" class="action-card">
+                <div class="action-icon">♙</div>
+                <h3>My Circles</h3>
+                <p>View your household</p>
+            </a>
+
+        </section>
+
+
+        <!-- My Events -->
+        <section class="events-section">
+
+            <div class="events-header">
+                <h3>My Events</h3>
+                <button class="today-button">Today⌄</button>
+            </div>
+
+            <div id="homeEvents">
+                <!-- Events are added using JavaScript -->
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+
+        <a href="index.html" class="active">
+            <span>⌂</span>
+            Home
+        </a>
+
+        <a href="calendar.html">
+            <span>▦</span>
+            Calendar
+        </a>
+
+        <a href="tasks.html">
+            <span>♧</span>
+            Tasks
+        </a>
+
+        <a href="family.html">
+            <span>♙</span>
+            Family
+        </a>
+
+    </nav>
+
+
+    <!-- JavaScript Files -->
+    <script src="js/data.js"></script>
+    <script src="js/script.js"></script>
+
+</body>
+</html>
