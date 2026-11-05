@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Update progress ring
         document.getElementById("progressRing").style.background =
-            `conic-gradient(#337c6e ${percentage}%, #ffffff ${percentage}%)`;
+            `conic-gradient(#357266 ${percentage}%, #ffffff ${percentage}%)`;
 
 
         // Display upcoming events
