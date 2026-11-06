@@ -15,20 +15,71 @@
 
         <header class="page-header">
             <h1 class="page-title">Tasks</h1>
-            <p>Stay on top of your household responsibilities.</p>
+            <p>Review and respond to household task requests.</p>
         </header>
 
-        <!-- Task List -->
-        <section>
+        <div id="taskListView">
+            <section class="task-notifications">
+                <div class="section-heading">
+                    <h2>New Task Requested</h2>
+                </div>
+                <div id="taskRequests" aria-live="polite"></div>
+            </section>
 
-            <div class="section-heading">
-                <h2>All Tasks</h2>
-            </div>
+            <section class="task-history" id="yourTasksSection">
+                <div class="section-heading">
+                    <h2>Your Tasks</h2>
+                </div>
+                <div id="yourTasks" aria-live="polite"></div>
+            </section>
 
-            <div id="tasksList">
-                <!-- Tasks are added using JavaScript -->
-            </div>
+            <section class="task-history">
+                <div class="section-heading">
+                    <h2>All Tasks</h2>
+                    <button class="add-member-trigger" id="openAddTask" type="button" aria-expanded="false" aria-controls="addTaskForm">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        Assign task
+                    </button>
+                </div>
 
+                <form class="member-form" id="addTaskForm" hidden>
+                    <h3>Assign a task</h3>
+                    <label for="newTaskTitle">Task</label>
+                    <input id="newTaskTitle" name="title" type="text" maxlength="100" placeholder="Enter a task" required>
+
+                    <span class="task-form-label">Assign to</span>
+                    <div class="task-assignee-options" id="taskAssigneeOptions"></div>
+
+                    <div class="chore-datetime">
+                        <label class="chore-input">
+                            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                            <span class="visually-hidden">Due date</span>
+                            <input id="newTaskDate" name="date" type="date">
+                        </label>
+                        <label class="chore-input">
+                            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                            <span class="visually-hidden">Due time</span>
+                            <input id="newTaskTime" name="time" type="time">
+                        </label>
+                    </div>
+
+                    <p class="family-message" id="newTaskMessage" role="alert" hidden></p>
+                    <div class="member-form-actions">
+                        <button class="secondary-button" id="cancelAddTask" type="button">Cancel</button>
+                        <button class="primary-button" type="submit">Assign task</button>
+                    </div>
+                </form>
+
+                <div id="allTasks" aria-live="polite"></div>
+            </section>
+        </div>
+
+        <section class="task-feedback" id="taskFeedback" aria-live="polite" hidden>
+            <div class="task-feedback-icon" id="taskFeedbackIcon" aria-hidden="true"></div>
+            <h2 id="taskFeedbackTitle"></h2>
+            <p id="taskFeedbackMessage"></p>
+            <div id="feedbackTaskCard" class="feedback-task-slot"></div>
+            <button class="task-action-button accept-task feedback-back-button" id="backToTasks" type="button">Back to Tasks</button>
         </section>
 
     </main>

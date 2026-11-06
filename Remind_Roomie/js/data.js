@@ -29,16 +29,37 @@ const householdData = {
 
     tasks: [
         {
-            title: "Clean the kitchen",
+            id: "sample-task-clean-kitchen",
+            title: "Clean Kitchen",
             assignedTo: "Dan",
-            dueDate: "Today",
-            status: "Pending"
+            assignedBy: "Rubina",
+            dueDate: "November 6",
+            dueTime: "5:00 PM",
+            status: "Requested"
         },
         {
+            id: "sample-task-take-meat-out",
             title: "Take meat out",
-            assignedTo: "Sarah",
+            assignedTo: "Dan",
             dueDate: "Today",
+            assignedBy: "Dan",
             status: "Completed"
+        },
+        {
+            id: "sample-task-take-out-trash",
+            title: "Take out the trash",
+            assignedTo: "Dan",
+            assignedBy: "Rubina",
+            dueDate: "Tomorrow",
+            status: "Requested"
+        },
+        {
+            id: "sample-task-wash-dishes",
+            title: "Wash the dishes",
+            assignedTo: "Dan",
+            assignedBy: "Rubina",
+            dueDate: "Tomorrow",
+            status: "Requested"
         }
     ],
 

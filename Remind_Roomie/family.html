@@ -18,17 +18,64 @@
             <p>Manage your household members.</p>
         </header>
 
-        <!-- Family Members -->
         <section>
-
             <div class="section-heading">
                 <h2>Household Members</h2>
+                <button
+                    class="add-member-trigger"
+                    id="addMemberButton"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="memberForm"
+                >
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    Add member
+                </button>
             </div>
+
+            <form class="member-form" id="memberForm" hidden>
+                <h3>Add a household member</h3>
+
+                <label for="memberName">Name</label>
+                <input
+                    id="memberName"
+                    name="name"
+                    type="text"
+                    maxlength="60"
+                    placeholder="Enter their name"
+                    autocomplete="name"
+                    required
+                >
+
+                <label for="memberRole">Relationship <span>(optional)</span></label>
+                <input
+                    id="memberRole"
+                    name="role"
+                    type="text"
+                    maxlength="60"
+                    placeholder="e.g. Parent, roommate"
+                >
+
+                <label for="memberPhoto">Profile picture <span>(optional)</span></label>
+                <input
+                    id="memberPhoto"
+                    name="photo"
+                    type="file"
+                    accept="image/*"
+                >
+                <p class="form-help">Choose an image up to 2 MB.</p>
+
+                <p class="family-message" id="familyMessage" role="alert" hidden></p>
+
+                <div class="member-form-actions">
+                    <button class="secondary-button" id="cancelAddMember" type="button">Cancel</button>
+                    <button class="primary-button" type="submit">Add member</button>
+                </div>
+            </form>
 
             <div id="familyList">
                 <!-- Family members are added using JavaScript -->
             </div>
-
         </section>
 
     </main>
