@@ -364,6 +364,266 @@ button {
     color: #316c56;
 }
 
+.status.accepted {
+    background-color: #d5eee2;
+    color: #316c56;
+}
+
+.status.rejected {
+    background-color: #eeeeee;
+    color: #666666;
+}
+
+.task-notifications,
+.task-history {
+    margin-bottom: 22px;
+}
+
+.task-request-card {
+    margin-bottom: 13px;
+    padding: 16px;
+    border: 1px solid #e1e5e3;
+    border-radius: 15px;
+    background-color: white;
+}
+
+.task-request-title {
+    margin-bottom: 8px;
+    font-size: 19px;
+}
+
+.task-assigned-by {
+    margin-bottom: 5px;
+    font-size: 15px;
+}
+
+.task-due {
+    color: #777;
+    font-size: 13px;
+}
+
+.task-request-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.task-action-button {
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid #17675b;
+    border-radius: 22px;
+    font: inherit;
+    font-weight: 700;
+}
+
+.accept-task {
+    background-color: #17675b;
+    color: white;
+}
+
+.reject-task {
+    background-color: white;
+    color: #17675b;
+}
+
+.reschedule-task {
+    width: 100%;
+    margin-top: 9px;
+    background-color: #e5f1ee;
+    color: #17675b;
+}
+
+.task-history .task-request-card {
+    padding: 13px 15px;
+}
+
+.task-history .task-request-title {
+    font-size: 16px;
+}
+
+.task-history .status {
+    display: inline-block;
+    margin-top: 10px;
+}
+
+.task-history .status.requested {
+    background-color: #fff0cc;
+    color: #956a19;
+}
+
+.task-list-card {
+    min-height: 56px;
+    margin-bottom: 9px;
+    padding: 9px 11px;
+    border: 1px solid #e1e5e3;
+    border-radius: 11px;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.task-list-avatar {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    border: 1px solid #d6ddda;
+    border-radius: 50%;
+    background-color: #e5f1ee;
+    display: grid;
+    place-items: center;
+    color: #17675b;
+    font-size: 13px;
+}
+
+.task-list-details {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 3px;
+}
+
+.task-list-details strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.task-list-details span {
+    overflow: hidden;
+    color: #777;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+}
+
+.task-list-card.completed .task-list-details strong {
+    color: #777;
+    text-decoration: line-through;
+}
+
+.task-list-check {
+    color: #17675b;
+}
+
+.task-completion-toggle {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    accent-color: #17675b;
+}
+
+.task-list-card .status {
+    font-size: 10px;
+    padding: 5px 7px;
+}
+
+.task-assignee-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.task-form-label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.task-assignee-option {
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background-color: #fbfcfb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.task-assignee-option input {
+    accent-color: #17675b;
+}
+
+.task-feedback {
+    min-height: 0;
+    padding: 12px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.task-feedback[hidden],
+#addTaskForm[hidden] {
+    display: none;
+}
+
+.task-feedback-icon {
+    width: 62px;
+    height: 62px;
+    margin: 0 0 10px;
+    border: 2px solid #17675b;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #17675b;
+    font-size: 30px;
+}
+
+.task-feedback h2 {
+    margin-bottom: 7px;
+    font-size: 20px;
+}
+
+.task-feedback > p {
+    max-width: 260px;
+    margin-bottom: 14px;
+    color: #555;
+    font-size: 14px;
+}
+
+.task-feedback .task-list-card {
+    width: 100%;
+    margin-bottom: 18px;
+    text-align: left;
+}
+
+.show-task-feedback .page-header {
+    margin-bottom: 12px;
+}
+
+.show-task-feedback .page-header p {
+    display: none;
+}
+
+.feedback-back-button {
+    width: 100%;
+    margin-top: 5px;
+}
+
+.reschedule-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.reschedule-form input {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background-color: #fbfcfb;
+    font: inherit;
+}
+
 /* ==============================
    CALENDAR PAGE
 ============================== */
@@ -404,6 +664,36 @@ button {
    FAMILY PAGE
 ============================== */
 
+#membersPanel[hidden],
+#choresPanel[hidden] {
+    display: none;
+}
+
+.family-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 3px;
+    margin-bottom: 20px;
+    border: 1px solid #d6ddda;
+    border-radius: 12px;
+    background-color: white;
+}
+
+.family-tab {
+    min-height: 38px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #17675b;
+    font-weight: 700;
+}
+
+.family-tab.active {
+    background-color: #17675b;
+    color: white;
+}
+
 #familyList .task-card {
     background-color: white;
     padding: 15px;
@@ -413,6 +703,286 @@ button {
 
 #familyList .task-avatar {
     background-color: #e7d9f5;
+    overflow: hidden;
+}
+
+#familyList .task-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.add-member-trigger,
+.primary-button {
+    border: 0;
+    border-radius: 12px;
+    background-color: #17675b;
+    color: white;
+    font-weight: 700;
+}
+
+.add-member-trigger {
+    padding: 9px 12px;
+    font-size: 13px;
+}
+
+.add-member-trigger i {
+    margin-right: 4px;
+}
+
+.member-form {
+    display: grid;
+    gap: 9px;
+    margin-bottom: 18px;
+    padding: 18px;
+    border-radius: 15px;
+    background-color: white;
+}
+
+.member-form[hidden] {
+    display: none;
+}
+
+.member-form h3 {
+    margin-bottom: 5px;
+    font-size: 17px;
+}
+
+.member-form label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.member-form label span,
+.form-help {
+    color: #777;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.member-form input[type="text"],
+.member-form input[type="file"] {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background-color: #fbfcfb;
+    font: inherit;
+}
+
+.member-form input:focus {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.form-help {
+    margin-top: -5px;
+}
+
+.family-message {
+    color: #9c2f2f;
+    font-size: 13px;
+}
+
+.member-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 5px;
+}
+
+.primary-button,
+.secondary-button {
+    min-height: 40px;
+    padding: 9px 14px;
+    font-size: 13px;
+}
+
+.secondary-button {
+    border: 1px solid #d6ddda;
+    border-radius: 12px;
+    background-color: white;
+    color: #17675b;
+    font-weight: 700;
+}
+
+.chore-assignment h2,
+.assigned-chores h2 {
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+.chore-member-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.chore-member-option {
+    min-width: 0;
+    min-height: 72px;
+    padding: 8px 4px;
+    border: 1px solid #d6ddda;
+    border-radius: 12px;
+    background-color: white;
+    color: #080808;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.chore-member-option[aria-pressed="true"] {
+    border-color: #17675b;
+    background-color: #e5f1ee;
+    box-shadow: inset 0 0 0 1px #17675b;
+}
+
+.chore-member-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: #e7d9f5;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.chore-member-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.chore-member-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#choreForm {
+    display: grid;
+    gap: 10px;
+}
+
+.chore-input {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 11px;
+    border: 1px solid #d6ddda;
+    border-radius: 10px;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #17675b;
+}
+
+.chore-input:focus-within {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.chore-input input {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #080808;
+    font: inherit;
+    font-size: 13px;
+}
+
+.chore-datetime {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.chore-input input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+}
+
+.assign-chore-button {
+    width: 100%;
+}
+
+.assigned-chores {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #d6ddda;
+}
+
+.assigned-chores h2 {
+    margin-bottom: 10px;
+}
+
+.chore-card {
+    min-height: 58px;
+    margin-bottom: 9px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chore-complete-toggle {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    accent-color: #17675b;
+    cursor: pointer;
+}
+
+.chore-card-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.chore-card-info h3 {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+}
+
+.chore-card-info p {
+    margin-top: 4px;
+    color: #777;
+    font-size: 11px;
+}
+
+.chore-card.completed .chore-card-info h3 {
+    color: #777;
+    text-decoration: line-through;
+}
+
+.empty-chores {
+    padding: 14px;
+    border-radius: 12px;
+    background-color: white;
+    color: #777;
+    font-size: 13px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* ==============================
