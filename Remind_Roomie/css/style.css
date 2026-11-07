@@ -26,26 +26,27 @@ button {
     width: 100%;
     max-width: 430px;
     margin: 0 auto;
-    padding: 38px 19px 100px;
+    padding: 44px 20px 120px;
 }
 
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 22px;
+    margin-bottom: 28px;
     padding: 0 4px;
 }
 
 .profile-section {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 }
 
 .profile-avatar {
-    width: 55px;
-    height: 55px;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
     background-color: #ffcc00;
     border-radius: 50%;
     display: flex;
@@ -55,13 +56,15 @@ button {
 }
 
 .welcome-text p {
-    font-size: 20px;
-    margin-bottom: 2px;
+    font-size: 14px;
+    color: #6a6969;
+    margin-bottom: 4px;
 }
 
 .welcome-text h2 {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
+    line-height: 1.2;
 }
 
 .notification-button {
@@ -76,20 +79,21 @@ button {
 
 .progress-card {
     width: 100%;
-    min-height: 97px;
+    min-height: 120px;
     background-color: #B2E6EF;
-    border-radius: 19px;
-    padding: 15px 16px;
+    border-radius: 22px;
+    padding: 22px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 22px;
+    gap: 16px;
+    margin-bottom: 28px;
 }
 
 .progress-info h3 {
-    font-size: 24px;
-    line-height: 22px;
-    margin-bottom: 5px;
+    font-size: 22px;
+    line-height: 1.2;
+    margin-bottom: 8px;
 }
 
 .progress-info p {
@@ -101,16 +105,23 @@ button {
     margin-bottom: 7px;
 }
 
+#currentDate {
+    font-size: 13px;
+    color: #4a4a4a;
+    margin-bottom: 10px;
+}
+
 #taskProgress {
-    font-size: 12px;
-    color: #6a6969;
+    font-size: 13px;
+    color: #4a4a4a;
+    margin-top: 4px;
     margin-left: 6px;
 }
 
 .progress-ring {
-    width: 58px;
-    height: 58px;
-    min-width: 58px;
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
@@ -118,8 +129,8 @@ button {
 }
 
 .progress-inner {
-    width: 47px;
-    height: 47px;
+    width: 52px;
+    height: 52px;
     background-color: #B2E6EF;
     border-radius: 50%;
     display: flex;
@@ -135,53 +146,62 @@ button {
 .quick-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-    gap: 14px;
-    margin-bottom: 21px;
+    gap: 16px;
+    margin-bottom: 28px;
 }
 
 .action-card {
     min-width: 0;
-    min-height: 94px;
+    min-height: 140px;
     background-color: white;
     border-radius: 20px;
-    padding: 15px;
+    padding: 18px;
     justify-content: space-between;
     flex-direction: column;
     text-decoration: none;
     color: black;
-    display: grid;
+    display: flex;
+    gap: 6px;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     align-content: start;
 }
 
 .action-card h3 {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.3;
     grid-column: 1;
     grid-row: 1;
 }
 
 .action-card p {
-    font-size: 11px;
+    font-size: 12px;
     color: #6a6969;
+    line-height: 1.4;
     grid-column: 1;
     grid-row: 2;
 }
 
 .action-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background-color: #e5f1ee;
     color: #17675b;
-    font-size: 23px;
-    align-self: flex-end;
+    font-size: 18px;
+    display: grid;
+    place-items: center;
     grid-column: 2;
     grid-row: 1;
-    align-self: start;
+    order: 1;
+    align-self: flex-end;
+    margin-top: auto;
 }
 
 .events-section {
     background-color: white;
     border-radius: 20px;
-    padding: 13px 11px 10px;
+    padding: 20px;
     min-height: 100px;
 }
 
@@ -189,11 +209,11 @@ button {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin: 0 4px 14px;
+    margin: 0 4px 16px;
 }
 
 .events-header h3 {
-    font-size: 17px;
+    font-size: 18px;
 }
 
 .today-button {
@@ -208,19 +228,19 @@ button {
 #homeEvents {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
 }
 
 #homeEvents .event-card {
     background-color: #f7dafa;
     flex: 1 1 180px;
     max-width: 100%;
-    min-height: 48px;
-    border-radius: 13px;
-    padding: 10px 10px;
+    min-height: 64px;
+    border-radius: 16px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 12px;
 }
 
 #homeEvents .event-details {
