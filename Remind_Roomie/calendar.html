@@ -13,23 +13,223 @@
 
     <main class="container">
 
-        <header class="page-header">
-            <h1 class="page-title">Calendar</h1>
-            <p>Keep track of your household events.</p>
+        <div id="calendarView">
+
+        <header class="page-header cal-header">
+            <div>
+                <h1 class="page-title">Calendar</h1>
+                <p>Keep track of your household events.</p>
+            </div>
         </header>
 
-        <!-- Calendar Events -->
-        <section>
-            <div class="section-heading">
-                <h2>Upcoming Events</h2>
+        <!-- Personal / Shared Toggle -->
+        <div class="cal-scope-tabs" role="group" aria-label="Calendar view">
+            <button type="button" class="cal-scope-tab" data-scope="personal" aria-pressed="true">Personal</button>
+            <button type="button" class="cal-scope-tab" data-scope="shared" aria-pressed="false">Shared</button>
+        </div>
+
+        <!-- Month View -->
+        <section class="cal-month">
+
+            <div class="cal-month-nav">
+                <button type="button" class="cal-nav-button" id="prevMonth" aria-label="Previous month">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+
+                <h2 id="monthTitle"></h2>
+
+                <button type="button" class="cal-nav-button" id="nextMonth" aria-label="Next month">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
             </div>
 
-            <div id="calendarEvents">
+            <div class="cal-weekdays" aria-hidden="true">
+                <span>S</span>
+                <span>M</span>
+                <span>T</span>
+                <span>W</span>
+                <span>T</span>
+                <span>F</span>
+                <span>S</span>
+            </div>
+
+            <div class="cal-grid" id="calendarGrid"></div>
+
+        </section>
+
+        <!-- Selected Day Events -->
+        <section>
+            <div class="section-heading">
+                <h2 id="selectedDayTitle"></h2>
+            </div>
+
+            <div id="dayEvents">
                 <!-- Events are added using JavaScript -->
             </div>
         </section>
 
+        <!-- This Week -->
+        <section>
+            <div class="section-heading">
+                <h2>This Week</h2>
+            </div>
+
+            <div id="weekEvents">
+                <!-- Events are added using JavaScript -->
+            </div>
+        </section>
+
+        </div>
+
+        <!-- Add Event View -->
+        <section id="addEventView" hidden>
+
+            <div class="cal-detail-top">
+                <button type="button" class="cal-nav-button" id="backFromAddEvent" aria-label="Back to calendar">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h1 class="cal-detail-title">Add event</h1>
+            </div>
+
+            <form class="cal-form" id="addEventForm">
+
+                <div class="cal-form-hero">
+                    <p class="cal-form-label">Event</p>
+                    <label class="visually-hidden" for="eventTitle">Event title</label>
+                    <input class="cal-title-input" id="eventTitle" type="text" placeholder="Event title">
+                </div>
+
+                <div class="cal-form-card">
+                    <div class="cal-form-row">
+                        <label for="eventDate">Date</label>
+                        <input id="eventDate" type="date">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <span class="cal-time-label">Start time</span>
+                        <div id="eventStartTimePicker"></div>
+                        <input id="eventTime" type="hidden">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <span class="cal-time-label">End time</span>
+                        <div id="eventEndTimePicker"></div>
+                        <input id="eventEndTime" type="hidden">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="eventLocation">Location</label>
+                        <input id="eventLocation" type="text" placeholder="Add a location">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" rows="3" placeholder="Add a description"></textarea>
+                    </div>
+
+                    <div class="cal-form-row">
+                        <span class="task-form-label" id="eventAssigneesLabel">Assign to</span>
+                        <div class="task-assignee-options" id="eventAssignees" role="group" aria-labelledby="eventAssigneesLabel"></div>
+                    </div>
+                </div>
+
+                <p class="family-message" id="eventMessage" hidden></p>
+
+                <div class="cal-form-actions">
+                    <button type="button" class="secondary-button" id="cancelAddEvent">Cancel</button>
+                    <button type="submit" class="primary-button">Save event</button>
+                </div>
+
+            </form>
+
+        </section>
+
+        <!-- Event Detail View -->
+        <section id="eventDetailView" hidden>
+
+            <div class="cal-detail-top">
+                <button type="button" class="cal-nav-button" id="backToCalendar" aria-label="Back to calendar">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h1 class="cal-detail-title">Calendar</h1>
+            </div>
+
+            <div class="cal-detail-hero" id="eventHero"></div>
+
+            <h2 class="cal-detail-heading">Event details</h2>
+
+            <div class="cal-form-card" id="eventDetailCard"></div>
+
+            <form class="cal-form" id="editEventForm" hidden>
+
+                <div class="cal-form-card">
+                    <div class="cal-form-row">
+                        <label for="editTitle">Title</label>
+                        <input id="editTitle" type="text">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="editDate">Date</label>
+                        <input id="editDate" type="date">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="editTime">Time</label>
+                        <input id="editTime" type="time">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="editEndTime">End time</label>
+                        <input id="editEndTime" type="time">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="editLocation">Location</label>
+                        <input id="editLocation" type="text">
+                    </div>
+
+                    <div class="cal-form-row">
+                        <label for="editDescription">Description</label>
+                        <textarea id="editDescription" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <p class="family-message" id="editMessage" hidden></p>
+
+                <div class="cal-form-actions">
+                    <button type="button" class="secondary-button" id="cancelEditEvent">Cancel</button>
+                    <button type="submit" class="primary-button">Save changes</button>
+                </div>
+
+            </form>
+
+            <button type="button" class="cal-back-link" id="backToCalendarLink">
+                <i class="fa-solid fa-calendar-days"></i>
+                Back to calendar
+            </button>
+
+        </section>
+
     </main>
+
+    <!-- Delete Confirmation -->
+    <div class="cal-modal" id="deleteModal" hidden>
+        <div class="cal-modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+            <h2 id="deleteModalTitle">Delete event?</h2>
+            <p id="deleteModalText"></p>
+            <div class="cal-form-actions">
+                <button type="button" class="secondary-button" id="cancelDelete">Cancel</button>
+                <button type="button" class="primary-button cal-danger" id="confirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Event Button -->
+    <div class="cal-fab-wrap">
+        <button class="cal-add-button" id="addEventButton" aria-label="Add event" aria-expanded="false">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
