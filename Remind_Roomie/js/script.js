@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const homeEvents = document.getElementById("homeEvents");
 
     if (homeEvents) {
+        const homeTasks = document.getElementById("homeTasks");
 
         // Display user information
         document.getElementById("profileAvatar").textContent =
@@ -57,23 +58,202 @@ document.addEventListener("DOMContentLoaded", function () {
             `conic-gradient(#357266 ${percentage}%, #ffffff ${percentage}%)`;
 
 
-        // Display upcoming events
-        homeEvents.innerHTML = householdData.events.map(event => `
-            <div class="event-card">
+        const userName = householdData.user.name;
+        const currentUser = householdData.family.find(member => member.name === userName);
+        const memberForName = name => householdData.family.find(member => member.name === name);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        const personalEvents = [
+            ...householdData.calendar.personal.map(event => ({
+                ...event,
+                owner: userName
+            }))
+        ];
 
-                <div class="event-avatar">
-                    ${event.initials}
-                </div>
+        try {
+            const savedEvents = JSON.parse(localStorage.getItem("remindRoomieCalendarEvents") || "[]");
+            if (!Array.isArray(savedEvents)) {
+                throw new Error("Saved events have an invalid format.");
+            }
+            personalEvents.push(...savedEvents
+                .filter(event => event.scope !== "shared")
+                .map(event => ({ ...event, owner: userName })));
+        } catch (error) {
+            console.error("Could not load calendar events for the home page.", error);
+        }
 
-                <div class="event-details">
-                    <h4>${event.title}</h4>
-                    <p>${event.date} · ${event.time}</p>
-                </div>
+        let eventEdits = {};
+        let deletedEventIds = [];
+        try {
+            const savedEdits = localStorage.getItem("remindRoomieCalendarEdits");
+            eventEdits = savedEdits ? JSON.parse(savedEdits) : {};
+            if (!eventEdits || Array.isArray(eventEdits) || typeof eventEdits !== "object") {
+                throw new Error("Saved event changes have an invalid format.");
+            }
+        } catch (error) {
+            console.error("Could not load event changes for the home page.", error);
+        }
+        try {
+            const savedDeletedEvents = localStorage.getItem("remindRoomieDeletedEvents");
+            deletedEventIds = savedDeletedEvents ? JSON.parse(savedDeletedEvents) : [];
+            if (!Array.isArray(deletedEventIds)) {
+                throw new Error("Deleted events have an invalid format.");
+            }
+        } catch (error) {
+            console.error("Could not load deleted events for the home page.", error);
+        }
 
-                <div class="event-indicator"></div>
+        const eventsThisWeek = personalEvents
+            .filter(event => !deletedEventIds.includes(event.id))
+            .map(event => ({ ...event, ...(eventEdits[event.id] || {}) }))
+            .filter(event => {
+                const eventDate = new Date(`${event.date}T00:00:00`);
+                return event.owner === userName && event.date &&
+                    !Number.isNaN(eventDate.getTime()) &&
+                    eventDate >= today && eventDate < weekEnd;
+            })
+            .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""));
 
-            </div>
-        `).join("");
+        if (eventsThisWeek.length) {
+            eventsThisWeek.forEach(event => {
+                const card = document.createElement("article");
+                card.className = "event-card";
+                const owner = memberForName(event.owner);
+                card.style.backgroundColor = owner?.secondary || "#fbe0fb";
+                const avatar = document.createElement("div");
+                avatar.className = "event-avatar";
+                avatar.style.backgroundColor = owner?.color || "#f7dafa";
+                avatar.textContent = owner?.initials || userName.charAt(0).toUpperCase();
+                const details = document.createElement("div");
+                details.className = "event-details";
+                const title = document.createElement("h4");
+                title.textContent = event.title;
+                const date = document.createElement("p");
+                const eventDate = new Date(`${event.date}T00:00:00`);
+                const dateText = eventDate.toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric"
+                });
+                const timeText = event.time
+                    ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit"
+                    })
+                    : "All day";
+                date.textContent = `${dateText} · ${timeText}`;
+                details.append(title, date);
+                card.append(avatar, details);
+                homeEvents.append(card);
+            });
+        } else {
+            const empty = document.createElement("p");
+            empty.className = "home-list-empty";
+            empty.textContent = "No personal events this week.";
+            homeEvents.append(empty);
+        }
+
+        const assignedToCurrentUser = task => {
+            const assignedNames = Array.isArray(task.assignedTo)
+                ? task.assignedTo
+                : String(task.assignedTo || "").split(",").map(name => name.trim());
+            return assignedNames.includes(userName) || assignedNames.includes("Household");
+        };
+        let homeTaskList = [...householdData.tasks];
+        let taskDecisions = {};
+
+        try {
+            const savedTasks = localStorage.getItem("remindRoomieTasks") ||
+                localStorage.getItem("remindRoomieChores");
+            if (savedTasks) {
+                const parsedTasks = JSON.parse(savedTasks);
+                if (!Array.isArray(parsedTasks) || parsedTasks.some(task => !task || typeof task.title !== "string")) {
+                    throw new Error("Saved tasks have an invalid format.");
+                }
+                homeTaskList.push(...parsedTasks.map(task => ({
+                    ...task,
+                    assignedTo: task.assignedTo || householdData.family
+                        .filter((member, index) => task.memberIds?.includes(member.id || `member-${index}`))
+                        .map(member => member.name)
+                        .join(", ") || "Household"
+                })));
+            }
+        } catch (error) {
+            console.error("Could not load tasks for the home page.", error);
+        }
+        try {
+            const savedDecisions = localStorage.getItem("remindRoomieTaskDecisions");
+            taskDecisions = savedDecisions ? JSON.parse(savedDecisions) : {};
+            if (!taskDecisions || Array.isArray(taskDecisions) || typeof taskDecisions !== "object") {
+                throw new Error("Saved task updates have an invalid format.");
+            }
+        } catch (error) {
+            console.error("Could not load task updates for the home page.", error);
+        }
+
+        const myTasks = homeTaskList
+            .map((task, index) => {
+                const id = task.id || `sample-task-${index}`;
+                return { ...task, ...taskDecisions[id], id };
+            })
+            .filter(task => assignedToCurrentUser(task) &&
+                String(task.status || "requested").toLowerCase() !== "completed");
+
+        const formatTaskDue = task => {
+            if (task.date) {
+                const dueDate = new Date(`${task.date}T00:00:00`);
+                const dateText = dueDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric"
+                });
+                const timeText = task.time
+                    ? ` · ${new Date(`2000-01-01T${task.time}`).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit"
+                    })}`
+                    : "";
+                return `Due ${dateText}${timeText}`;
+            }
+            return task.dueDate
+                ? `Due ${task.dueDate}${task.dueTime ? ` · ${task.dueTime}` : ""}`
+                : "No due date";
+        };
+
+        if (myTasks.length) {
+            myTasks.forEach(task => {
+                const card = document.createElement("article");
+                card.className = "event-card";
+                const assignedNames = Array.isArray(task.assignedTo)
+                    ? task.assignedTo
+                    : String(task.assignedTo || "").split(",").map(name => name.trim());
+                const assignee = assignedNames.map(memberForName).find(Boolean) || currentUser;
+                card.style.backgroundColor = assignee?.secondary || "#fbe0fb";
+                const avatar = document.createElement("div");
+                avatar.className = "event-avatar task-home-avatar";
+                avatar.style.backgroundColor = assignee?.color || "#f7dafa";
+                const icon = document.createElement("i");
+                icon.className = "fa-solid fa-list-check";
+                icon.setAttribute("aria-hidden", "true");
+                avatar.append(icon);
+                const details = document.createElement("div");
+                details.className = "event-details";
+                const title = document.createElement("h4");
+                title.textContent = task.title;
+                const due = document.createElement("p");
+                const status = String(task.status || "requested").toLowerCase();
+                due.textContent = `${formatTaskDue(task)} · ${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+                details.append(title, due);
+                card.append(avatar, details);
+                homeTasks.append(card);
+            });
+        } else {
+            const empty = document.createElement("p");
+            empty.className = "home-list-empty";
+            empty.textContent = "No tasks assigned to you.";
+            homeTasks.append(empty);
+        }
 
     }
 
