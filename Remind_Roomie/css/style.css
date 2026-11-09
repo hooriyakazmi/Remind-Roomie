@@ -498,7 +498,7 @@ button {
     width: 30px;
     height: 30px;
     flex: 0 0 30px;
-    border: 1px solid #d6ddda;
+    border: 0;
     border-radius: 50%;
     background-color: #e5f1ee;
     display: grid;
@@ -1252,6 +1252,27 @@ button {
     gap: 12px;
 }
 
+.cal-event-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.cal-event-row .cal-event {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.cal-family-marker {
+    width: 16px;
+    flex: 0 0 16px;
+    text-align: center;
+    color: #17675b;
+    font-size: 12px;
+}
+
 .cal-family-icon {
     position: absolute;
     top: 8px;
@@ -1265,15 +1286,21 @@ button {
     background-color: #e5f1ee;
 }
 
+.cal-event-avatars {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
 .cal-event-avatar {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
     border-radius: 50%;
     display: grid;
     place-items: center;
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 13px;
+    color: #080808;
 }
 
 .cal-event-time {
@@ -1806,8 +1833,8 @@ button {
 .account-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: min(100% - 32px, 430px);
+    justify-content: center;
+    width: 100%;
     margin: 0 auto 14px;
     padding: 10px 14px;
     border-radius: 12px;
@@ -1823,6 +1850,12 @@ button {
     color: #17675b;
     font: inherit;
     font-weight: 700;
+}
+
+#signOutButton {
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #800000;
 }
 
 .app-status {

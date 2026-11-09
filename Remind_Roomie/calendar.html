@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Calendar</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20261108-resched-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -192,6 +192,11 @@
                         <label for="editDescription">Description</label>
                         <textarea id="editDescription" rows="3"></textarea>
                     </div>
+
+                    <div class="cal-form-row">
+                        <span class="task-form-label" id="editAssigneesLabel">Assign to</span>
+                        <div class="task-assignee-options" id="editAssignees" role="group" aria-labelledby="editAssigneesLabel"></div>
+                    </div>
                 </div>
 
                 <p class="family-message" id="editMessage" hidden></p>
@@ -231,10 +236,6 @@
         </button>
     </div>
 
-    <div class="account-bar">
-        <span>Signed in as <strong id="accountName"></strong></span>
-        <button id="signOutButton" type="button">Sign out</button>
-    </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
@@ -266,9 +267,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-names-1"></script>
-    <script src="js/data.js?v=20261108-names-1"></script>
-    <script src="js/script.js?v=20261108-names-1"></script>
+    <script src="js/form-controls.js?v=20261108-resched-1"></script>
+    <script src="js/data.js?v=20261108-resched-1"></script>
+    <script src="js/script.js?v=20261108-resched-1"></script>
 
 </body>
 </html>

@@ -24,7 +24,8 @@ function stopCloud() {
   window.roomieCloud = null;
 }
 
-document.getElementById("signOutButton").addEventListener("click", async () => {
+// Only the Settings page has a sign-out button, so other pages skip this
+document.getElementById("signOutButton")?.addEventListener("click", async () => {
   try {
     await signOut(auth);
   } catch (error) {
@@ -63,7 +64,8 @@ window.roomieHouseholdReady = new Promise(resolve => {
       data.tasks = [];
       data.calendar = { personal: [], housemates: [], shared: [] };
       window.roomieCloud = createHouseholdCloud(profile.householdId, user, reportError);
-      document.getElementById("accountName").textContent = name;
+      const accountName = document.getElementById("accountName");
+      if (accountName) accountName.textContent = name;
       offerLegacyImport(window.roomieCloud);
       resolve(window.roomieCloud);
     } catch (error) {

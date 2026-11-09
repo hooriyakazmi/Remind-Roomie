@@ -310,6 +310,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const editLocation = document.getElementById("editLocation");
         const editDescription = document.getElementById("editDescription");
         const editMessage = document.getElementById("editMessage");
+        const editAssignees = document.getElementById("editAssignees");
         const monthTitle = document.getElementById("monthTitle");
         const selectedDayTitle = document.getElementById("selectedDayTitle");
         const weekEvents = document.getElementById("weekEvents");
@@ -423,12 +424,13 @@ document.addEventListener("DOMContentLoaded", async function () {
                     const assignedNames = String(task.assignedTo || "").split(",").map(name => name.trim());
                     const isAssignedToMe = task.memberIds?.includes(meId) || assignedNames.includes(householdData.user.name);
                     const isAssignedByMe = task.assignedById === meId;
-                    return task.status !== "rejected" && (task.dueDate || task.date) && (isAssignedToMe || isAssignedByMe);
+                    return task.status !== "rejected" && (task.date || task.dueDate) && (isAssignedToMe || isAssignedByMe);
                 })
                 .map(task => ({
                     id: `task-${task.id}`,
                     title: task.title,
-                    date: task.dueDate || task.date,
+                    // Rescheduling sets `date`, so it takes priority over the original due date
+                    date: task.date || task.dueDate,
                     time: task.time || "",
                     location: "",
                     description: task.details || "Household task",
@@ -609,10 +611,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             card.className = `cal-event ${event.kind}`;
             card.style.backgroundColor = owner?.secondary || "#fbe0fb";
 
+            // One circle per person assigned, overlapping like the task cards
             const avatar = document.createElement("span");
-            avatar.className = "cal-event-avatar";
-            avatar.style.backgroundColor = owner?.color || "#f7dafa";
-            avatar.textContent = owner?.initials || "?";
+            avatar.className = "cal-event-avatars";
+
+            function buildCircle(member) {
+                const circle = document.createElement("span");
+                circle.className = "cal-event-avatar";
+                circle.style.backgroundColor = member?.color || "#f7dafa";
+                circle.textContent = member?.initials || "?";
+                return circle;
+            }
 
             const time = document.createElement("span");
             time.className = "cal-event-time";
@@ -643,8 +652,45 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             card.append(avatar, details, time);
 
-            // Family-wide events, and personal events marked as shared, get the family icon
-            if (event.kind === "family" || event.sharedWithFamily) {
+            // Only events assigned to several people (or the whole family) get the family icon.
+            // Everyone listed counts, including you
+            const listedPeople = new Set(event.attendees || []).size;
+            const isSharedWithSeveral = (event.kind === "family" && (!event.attendees?.length || listedPeople > 1))
+                || (event.kind === "task" && listedPeople > 1);
+            // Events shared with the whole family show the family icon in place of the initial
+            const isFamilyWide = event.kind === "family" && (!event.attendees?.length ||
+                householdData.family.every(member => member.id === event.owner || event.attendees.includes(member.id)));
+            if (isFamilyWide) {
+                const familyCircle = buildCircle(null);
+                familyCircle.textContent = "";
+                familyCircle.style.backgroundColor = owner?.color || "#f7dafa";
+                const familyAvatarIcon = document.createElement("i");
+                familyAvatarIcon.className = "fa-solid fa-users";
+                familyAvatarIcon.setAttribute("aria-hidden", "true");
+                familyCircle.append(familyAvatarIcon);
+                avatar.append(familyCircle);
+            } else {
+                // Up to 3 people show their circle; with more, show 2 and a "+N" circle for the rest
+                const people = (event.attendees || []).map(memberFor).filter(Boolean);
+                const shownPeople = people.length > 3 ? people.slice(0, 2) : people;
+                const overlap = shownPeople.length === 3 ? "-14px" : "-8px";
+                (shownPeople.length ? shownPeople : [owner]).forEach((member, index) => {
+                    const circle = buildCircle(member);
+                    if (index > 0) {
+                        circle.style.marginLeft = overlap;
+                    }
+                    avatar.append(circle);
+                });
+                if (people.length > shownPeople.length) {
+                    const more = buildCircle(null);
+                    more.textContent = `+${people.length - shownPeople.length}`;
+                    more.style.backgroundColor = "#eeeeee";
+                    more.style.marginLeft = "-8px";
+                    avatar.append(more);
+                }
+            }
+
+            if (!isFamilyWide && (isSharedWithSeveral || event.sharedWithFamily)) {
                 const familyIcon = document.createElement("i");
                 familyIcon.className = "fa-solid fa-users cal-family-icon";
                 familyIcon.setAttribute("aria-label", "Shared with the family");
@@ -691,9 +737,10 @@ document.addEventListener("DOMContentLoaded", async function () {
             eventMessage.hidden = false;
         }
 
-        // Lists every family member as a chip, with you selected by default
-        function renderEventAssignees() {
-            eventAssignees.replaceChildren();
+        // Lists every family member as a chip. The add form selects you by default;
+        // the edit form selects the event's current people.
+        function renderEventAssignees(container = eventAssignees, selectedIds = [meId]) {
+            container.replaceChildren();
             householdData.family.forEach(member => {
                 const label = document.createElement("label");
                 label.className = "task-assignee-option";
@@ -701,7 +748,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 checkbox.type = "checkbox";
                 checkbox.name = "eventAssignee";
                 checkbox.value = member.id;
-                checkbox.checked = member.id === meId;
+                checkbox.checked = selectedIds.includes(member.id);
 
                 const avatar = document.createElement("span");
                 avatar.className = "cal-assignee-avatar";
@@ -719,7 +766,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 name.className = "cal-assignee-name";
                 name.textContent = member.name;
                 label.append(avatar, name, checkbox);
-                eventAssignees.append(label);
+                container.append(label);
             });
         }
 
@@ -852,6 +899,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 editLocation.value = event.location || "";
                 editDescription.value = event.description || "";
                 editMessage.hidden = true;
+                const currentPeople = (event.attendees?.length ? event.attendees : [event.owner])
+                    .map(value => memberFor(value)?.id)
+                    .filter(Boolean);
+                renderEventAssignees(editAssignees, currentPeople);
                 return;
             }
 
@@ -993,13 +1044,21 @@ document.addEventListener("DOMContentLoaded", async function () {
                 return;
             }
 
+            const attendees = [...editAssignees.querySelectorAll('input[name="eventAssignee"]:checked')]
+                .map(input => input.value);
+            if (!attendees.length) {
+                showEditMessage("Choose who this event is for.");
+                return;
+            }
+
             const changes = {
                 title,
                 date: editDate.value,
                 time: editTime.value,
                 endTime: editEndTime.value,
                 location: editLocation.value.trim(),
-                description: editDescription.value.trim()
+                description: editDescription.value.trim(),
+                attendees
             };
             const remoteEvent = householdData.calendar.shared.find(item => item.id === openEventId);
             if (remoteEvent) {
@@ -1010,6 +1069,26 @@ document.addEventListener("DOMContentLoaded", async function () {
                 } catch (error) {
                     console.error("Could not save the shared event change.", error);
                     showEditMessage("Could not save this shared event. Please try again.");
+                }
+                return;
+            }
+
+            // A personal event given to someone else moves to the shared calendar
+            const givenToOthers = attendees.some(value => !isMe(value));
+            if (givenToOthers) {
+                try {
+                    await window.roomieCloud.addEvent({
+                        ...changes,
+                        addedBy: householdData.user.name,
+                        scope: "shared"
+                    });
+                    const nextDeleted = [...deletedEventIds, openEventId];
+                    localStorage.setItem(deletedStorageKey, JSON.stringify(nextDeleted));
+                    deletedEventIds = nextDeleted;
+                    showCalendarView();
+                } catch (error) {
+                    console.error("Could not move the event to the shared calendar.", error);
+                    showEditMessage("Could not share this event. Please try again.");
                 }
                 return;
             }
@@ -1482,6 +1561,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             function buildAvatar(member, fallbackName) {
                 const circle = document.createElement("span");
                 circle.className = "task-list-avatar";
+                circle.style.color = "#080808";
                 if (member?.color) {
                     circle.style.backgroundColor = member.color;
                 }
@@ -1503,14 +1583,23 @@ document.addEventListener("DOMContentLoaded", async function () {
             avatar.className = "task-list-avatars";
             avatar.style.cssText = "display:flex;flex:0 0 auto;align-items:center;";
             avatar.setAttribute("aria-label", `Assigned to ${assignedNames.join(", ")}`);
+            // Up to 3 people show their circle; with more, show 2 and a "+N" circle for the rest
+            const shownAssignees = assignees.length > 3 ? assignees.slice(0, 2) : assignees;
             const avatarList = assignees.length
-                ? assignees.map(member => buildAvatar(member))
+                ? shownAssignees.map(member => buildAvatar(member))
                 : [buildAvatar(null, assignedNames[0])];
+            if (assignees.length > shownAssignees.length) {
+                const more = buildAvatar(null, "+");
+                more.textContent = `+${assignees.length - shownAssignees.length}`;
+                more.style.backgroundColor = "#eeeeee";
+                avatarList.push(more);
+            }
+            // Three circles overlap a little more so they fit the row
+            const overlap = avatarList.length === 3 ? "-14px" : "-8px";
             avatarList.forEach((circle, index) => {
                 if (index > 0) {
-                    circle.style.marginLeft = "-8px";
+                    circle.style.marginLeft = overlap;
                 }
-                circle.style.boxShadow = "0 0 0 2px #fff";
                 avatar.append(circle);
             });
  

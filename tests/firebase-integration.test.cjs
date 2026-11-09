@@ -248,6 +248,8 @@ test('calendar personal create/edit/delete stays scoped to the account', async (
   assert.equal(saved.getItem('remindRoomieCalendarEvents'), null);
   const day = fields.get('dayEvents').children[0];
   day.listeners.click();
+  const editPerson = new Element('input'); editPerson.checked = true; editPerson.value = 'alice';
+  fields.get('editAssignees').append(editPerson);
   for (const [id, value] of Object.entries({ editTitle: 'New dentist', editDate: '2026-11-12', editTime: '11:00', editEndTime: '12:00' })) fields.get(id).value = value;
   await fields.get('editEventForm').listeners.submit({ preventDefault() {}, stopImmediatePropagation() {} });
   const edits = JSON.parse(saved.getItem('remindRoomieCalendarEdits:alice'));
@@ -278,6 +280,8 @@ test('shared event create uses snapshot once and edit/delete call the cloud', as
   assert.equal(fields.get('dayEvents').children.length, 1);
   fields.get('dayEvents').children[0].listeners.click();
   let update, deleted;
+  const editPerson = new Element('input'); editPerson.checked = true; editPerson.value = 'alice';
+  fields.get('editAssignees').append(editPerson);
   cloud.updateEvent = async (id, changes) => { update = { id, changes }; };
   cloud.deleteEvent = async id => { deleted = id; };
   for (const [id, value] of Object.entries({ editTitle: 'Dinner updated', editDate: '2026-11-12', editTime: '18:30', editEndTime: '19:30' })) fields.get(id).value = value;
