@@ -10,7 +10,7 @@
 
 <body>
 
-    <main class="container">
+    <main class="container" id="settingsPage">
 
         <header class="page-header">
             <h1 class="page-title">Settings</h1>
@@ -33,6 +33,19 @@
             <p class="form-help">Your color appears on your events, your family card, and your profile. Colors already taken by a roommate are unavailable.</p>
             <div class="color-grid" id="settingsColors">
                 <!-- Color options are added using JavaScript -->
+            </div>
+        </section>
+
+        <section class="settings-card">
+            <div class="settings-toggle-row">
+                <div>
+                    <h2>Include personal tasks on calendar</h2>
+                    <p class="form-help">Show tasks on their due dates if they're assigned to you or you assigned them.</p>
+                </div>
+                <label class="switch">
+                    <input id="includeTasksToggle" type="checkbox" role="switch">
+                    <span class="switch-track"></span>
+                </label>
             </div>
         </section>
 
@@ -75,9 +88,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-controls-2"></script>
-    <script src="js/data.js?v=20261108-controls-2"></script>
-    <script src="js/script.js?v=20261108-controls-2"></script>
+    <script src="js/form-controls.js?v=20261108-names-1"></script>
+    <script src="js/data.js?v=20261108-names-1"></script>
+    <script src="js/script.js?v=20261108-names-1"></script>
 
 </body>
 </html>
