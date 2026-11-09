@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Settings</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-addbtn-1">
+    <link rel="stylesheet" href="css/style.css?v=20261109-past-items-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -22,6 +22,7 @@
             <form class="settings-form" id="settingsNameForm">
                 <label for="settingsName">Display name</label>
                 <input id="settingsName" type="text" maxlength="40" autocomplete="name">
+                <p class="settings-message" id="nameSettingsMessage" role="status" hidden></p>
                 <div class="member-form-actions">
                     <button class="primary-button" type="submit">Save name</button>
                 </div>
@@ -34,26 +35,12 @@
             <div class="color-grid" id="settingsColors">
                 <!-- Color options are added using JavaScript -->
             </div>
-        </section>
-
-        <section class="settings-card">
-            <div class="settings-toggle-row">
-                <div>
-                    <h2>Include personal tasks on calendar</h2>
-                    <p class="form-help">Show tasks on their due dates if they're assigned to you or you assigned them.</p>
-                </div>
-                <label class="switch">
-                    <input id="includeTasksToggle" type="checkbox" role="switch">
-                    <span class="switch-track"></span>
-                </label>
-            </div>
+            <p class="settings-message" id="colorSettingsMessage" role="status" hidden></p>
         </section>
 
         <div class="account-bar">
             <button id="signOutButton" type="button">Log out</button>
         </div>
-
-        <p class="settings-message" id="settingsMessage" role="status" hidden></p>
 
     </main>
 
@@ -89,7 +76,7 @@
 
     <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
     <script src="js/data.js?v=20261108-addbtn-1"></script>
-    <script src="js/script.js?v=20261108-home-event-detail-1"></script>
+    <script src="js/script.js?v=20261109-settings-feedback-1"></script>
 
 </body>
 </html>

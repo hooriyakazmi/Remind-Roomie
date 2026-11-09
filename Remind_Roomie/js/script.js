@@ -133,6 +133,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     const sortTasksByDueDate = tasks => tasks.sort((a, b) => taskDueDateTime(a) - taskDueDateTime(b));
 
+    function isTaskPastDue(task, today = new Date()) {
+        const todayStart = new Date(today);
+        todayStart.setHours(0, 0, 0, 0);
+        return taskDueDateTime(task) < todayStart.getTime();
+    }
+
     function formatTaskDue(task) {
         const dueDate = task.date || task.dueDate;
         if (!dueDate) {
@@ -537,6 +543,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const selectedDayTitle = document.getElementById("selectedDayTitle");
         const weekEvents = document.getElementById("weekEvents");
         const dayEvents = document.getElementById("dayEvents");
+        const pastEventsList = document.getElementById("pastEvents");
+        const togglePastEventsButton = document.getElementById("togglePastEvents");
         const addEventButton = document.getElementById("addEventButton");
         const addEventView = document.getElementById("addEventView");
         const addEventForm = document.getElementById("addEventForm");
@@ -637,32 +645,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
         }
 
-        // Tasks you're assigned or that you assigned, shown on their due dates when the setting is on
-        function taskEvents() {
-            if (localStorage.getItem(storageKey("remindRoomieIncludeTasks")) !== "on") {
-                return [];
-            }
-            return window.roomieCloud.tasks
-                .filter(task => {
-                    const assignedNames = String(task.assignedTo || "").split(",").map(name => name.trim());
-                    const isAssignedToMe = task.memberIds?.includes(meId) || assignedNames.includes(householdData.user.name);
-                    const isAssignedByMe = task.assignedById === meId;
-                    return task.status !== "rejected" && (task.date || task.dueDate) && (isAssignedToMe || isAssignedByMe);
-                })
-                .map(task => ({
-                    id: `task-${task.id}`,
-                    title: task.title,
-                    // Rescheduling sets `date`, so it takes priority over the original due date
-                    date: task.date || task.dueDate,
-                    time: task.time || "",
-                    location: "",
-                    description: task.details || "Household task",
-                    owner: task.assignedById || task.assignedBy || meId,
-                    attendees: task.memberIds || [],
-                    kind: "task"
-                }));
-        }
-
         // Saved changes are applied on top of the original event; deleted events are left out
         function allEvents() {
             return baseEvents()
@@ -683,7 +665,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                     kind: "family",
                     owner: event.createdBy || event.addedBy
                 })),
-                ...taskEvents(),
                 ...savedEvents.map(event => event.scope === "shared"
                     ? { ...event, kind: "family", owner: event.addedBy }
                     : { ...event, kind: "personal", owner: meId })
@@ -695,10 +676,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         // Shared tab: everyone's events.
         function visibleEvents() {
             return allEvents().filter(event => {
-                // Tasks appear on the personal calendar only, for the people they involve
-                if (event.kind === "task") {
-                    return scope === "personal" && (event.attendees?.some(isMe) || isMe(event.owner));
-                }
                 if (scope === "personal") {
                     const isMine = event.kind === "personal" && isMe(event.owner);
                     const isIncluded = event.kind === "family" &&
@@ -828,6 +805,23 @@ document.addEventListener("DOMContentLoaded", async function () {
             events.forEach(event => weekEvents.append(createEventCard(event)));
         }
 
+        function renderPastEvents() {
+            pastEventsList.replaceChildren();
+            const events = visibleEvents()
+                .filter(event => event.date < todayISO)
+                .sort((a, b) => b.date.localeCompare(a.date) || (b.time || "").localeCompare(a.time || ""));
+
+            if (!events.length) {
+                const empty = document.createElement("p");
+                empty.className = "empty-chores";
+                empty.textContent = "No past events.";
+                pastEventsList.append(empty);
+                return;
+            }
+
+            events.forEach(event => pastEventsList.append(createEventCard(event)));
+        }
+
         function createEventCard(event) {
             const card = document.createElement("article");
             const owner = recipientOf(event);
@@ -923,6 +917,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             renderMonth();
             renderWeek();
             renderDay();
+            renderPastEvents();
         }
 
         function changeMonth(step) {
@@ -941,6 +936,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             });
             render();
         }
+
+        togglePastEventsButton.addEventListener("click", () => {
+            const isExpanded = togglePastEventsButton.getAttribute("aria-expanded") !== "true";
+            togglePastEventsButton.setAttribute("aria-expanded", String(isExpanded));
+            togglePastEventsButton.textContent = isExpanded ? "Hide past events" : "Show past events";
+            pastEventsList.hidden = !isExpanded;
+        });
 
         function showEventMessage(message) {
             eventMessage.textContent = message;
@@ -1056,9 +1058,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                 return;
             }
 
-            const isOwner = event.kind !== "task" && (event._remote
+            const isOwner = event._remote
                 ? event.createdBy === window.roomieCloud.user.uid
-                : isMe(event.owner));
+                : isMe(event.owner);
             const owner = recipientOf(event);
 
             // Hero card, tinted with the recipient's secondary color
@@ -1659,6 +1661,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const taskDetailCard = document.getElementById("taskDetailCard");
         const yourTasksList = document.getElementById("yourTasks");
         const allTasksList = document.getElementById("allTasks");
+        const pastTasksList = document.getElementById("pastTasks");
+        const togglePastTasksButton = document.getElementById("togglePastTasks");
         const yourTasksSection = document.getElementById("yourTasksSection");
         const feedbackView = document.getElementById("taskFeedback");
         const feedbackIcon = document.getElementById("taskFeedbackIcon");
@@ -1678,6 +1682,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         let openTaskId = null;
         let requestedTaskId = new URLSearchParams(window.location.search).get("task");
         let loadError = "";
+        let pastTasksExpanded = false;
 
         function memberId(member, index) {
             return member.id || `member-${index}`;
@@ -1818,8 +1823,15 @@ document.addEventListener("DOMContentLoaded", async function () {
             dueText.textContent = due;
             details.append(title, dueText);
             details.append(createAttribution(assignedByName(task), "span"));
- 
-            if (options.allowCompletion && ["accepted", "completed"].includes(task.status)) {
+
+            if (task.status !== "completed" && isTaskPastDue(task)) {
+                const overdue = document.createElement("span");
+                overdue.className = "status overdue";
+                overdue.textContent = "Overdue";
+                card.append(overdue);
+            }
+
+            if (options.allowCompletion && isAssignedToCurrentUser(task) && ["accepted", "completed"].includes(task.status)) {
                 const checkbox = document.createElement("input");
                 checkbox.className = "task-completion-toggle";
                 checkbox.type = "checkbox";
@@ -1830,10 +1842,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 });
                 card.append(checkbox);
             } else if (task.status === "completed") {
-                const checkIcon = document.createElement("i");
-                checkIcon.className = "fa-solid fa-check task-list-check";
-                checkIcon.setAttribute("aria-label", "Completed");
-                card.append(checkIcon);
+                const status = document.createElement("span");
+                status.className = "status completed";
+                status.textContent = "Completed";
+                card.append(status);
             } else if (options.showStatus && task.status !== "completed") {
                 const status = document.createElement("span");
                 status.className = `status ${task.status}`;
@@ -1863,6 +1875,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             const due = document.createElement("p");
             due.className = "task-due roomie-due-date";
             due.textContent = formatTaskDue(task);
+
+            if (task.status !== "completed" && isTaskPastDue(task)) {
+                const overdue = document.createElement("span");
+                overdue.className = "status overdue";
+                overdue.textContent = "Overdue";
+                card.append(overdue);
+            }
 
             const actions = document.createElement("div");
             actions.className = "task-request-actions";
@@ -2007,11 +2026,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             taskRequests.replaceChildren();
             yourTasksList.replaceChildren();
             allTasksList.replaceChildren();
+            pastTasksList.replaceChildren();
             const tasks = allTasks();
-            const requests = tasks.filter(task =>
+            const pastTasks = tasks.filter(task =>
+                task.status === "completed" && isTaskPastDue(task)
+            );
+            const activeTasks = tasks.filter(task => !pastTasks.includes(task));
+            const requests = activeTasks.filter(task =>
                 task.status === "requested" && isAssignedToCurrentUser(task)
             );
-            const mine = tasks.filter(task =>
+            const mine = activeTasks.filter(task =>
                 isAssignedToCurrentUser(task) && ["accepted", "completed"].includes(task.status)
             );
 
@@ -2026,10 +2050,25 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             mine.forEach(task => yourTasksList.append(createTaskSummary(task, { allowCompletion: true })));
             yourTasksSection.hidden = mine.length === 0;
-            tasks.forEach(task => allTasksList.append(createTaskSummary(task, {
+            activeTasks.forEach(task => allTasksList.append(createTaskSummary(task, {
                 allowCompletion: true,
                 showStatus: true
             })));
+
+            if (pastTasks.length) {
+                pastTasks.forEach(task => pastTasksList.append(createTaskSummary(task, {
+                    allowCompletion: true,
+                    showStatus: true
+                })));
+            } else {
+                const empty = document.createElement("p");
+                empty.className = "empty-chores";
+                empty.textContent = "No completed past-due tasks yet.";
+                pastTasksList.append(empty);
+            }
+            pastTasksList.hidden = !pastTasksExpanded;
+            togglePastTasksButton.setAttribute("aria-expanded", String(pastTasksExpanded));
+            togglePastTasksButton.textContent = pastTasksExpanded ? "Hide past tasks" : "Show past tasks";
 
             if (loadError) {
                 const errorNotice = document.createElement("p");
@@ -2089,6 +2128,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             renderTasks();
         });
         document.getElementById("backFromTaskDetails").addEventListener("click", closeTaskDetail);
+        togglePastTasksButton.addEventListener("click", () => {
+            pastTasksExpanded = !pastTasksExpanded;
+            pastTasksList.hidden = !pastTasksExpanded;
+            togglePastTasksButton.setAttribute("aria-expanded", String(pastTasksExpanded));
+            togglePastTasksButton.textContent = pastTasksExpanded ? "Hide past tasks" : "Show past tasks";
+        });
 
         addTaskForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -2153,12 +2198,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         const nameForm = document.getElementById("settingsNameForm");
         const nameInput = document.getElementById("settingsName");
         const colorGrid = document.getElementById("settingsColors");
-        const settingsMessage = document.getElementById("settingsMessage");
+        const nameSettingsMessage = document.getElementById("nameSettingsMessage");
+        const colorSettingsMessage = document.getElementById("colorSettingsMessage");
 
-        function showSettingsMessage(message, isError = false) {
-            settingsMessage.textContent = message;
-            settingsMessage.classList.toggle("is-error", isError);
-            settingsMessage.hidden = false;
+        function showSettingsMessage(messageElement, message, isError = false) {
+            messageElement.textContent = message;
+            messageElement.classList.toggle("is-error", isError);
+            messageElement.hidden = false;
         }
 
         // Each color can belong to one person; taken colors are shown but disabled
@@ -2193,10 +2239,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         async function saveColor(color) {
             try {
                 await window.roomieCloud.updateProfile({ color });
-                showSettingsMessage("Color saved.");
+                showSettingsMessage(colorSettingsMessage, "Color saved.");
             } catch (error) {
                 console.error("Could not save the color.", error);
-                showSettingsMessage("Could not save your color. Please try again.", true);
+                showSettingsMessage(colorSettingsMessage, "Could not save your color. Please try again.", true);
             }
         }
 
@@ -2205,30 +2251,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             const name = nameInput.value.trim();
             if (!name) {
                 nameInput.focus();
-                showSettingsMessage("Enter a name.", true);
+                showSettingsMessage(nameSettingsMessage, "Enter a name.", true);
                 return;
             }
 
             try {
                 await window.roomieCloud.updateProfile({ displayName: name });
                 householdData.user.name = name;
-                showSettingsMessage("Name saved.");
+                showSettingsMessage(nameSettingsMessage, "Name saved.");
             } catch (error) {
                 console.error("Could not save the name.", error);
-                showSettingsMessage("Could not save your name. Please try again.", true);
-            }
-        });
-
-        const includeTasksToggle = document.getElementById("includeTasksToggle");
-        const includeTasksKey = storageKey("remindRoomieIncludeTasks");
-        includeTasksToggle.checked = localStorage.getItem(includeTasksKey) === "on";
-        includeTasksToggle.addEventListener("change", () => {
-            try {
-                localStorage.setItem(includeTasksKey, includeTasksToggle.checked ? "on" : "off");
-            } catch (error) {
-                console.error("Could not save the calendar setting.", error);
-                includeTasksToggle.checked = !includeTasksToggle.checked;
-                showSettingsMessage("Could not save this setting. Please try again.", true);
+                showSettingsMessage(nameSettingsMessage, "Could not save your name. Please try again.", true);
             }
         });
 

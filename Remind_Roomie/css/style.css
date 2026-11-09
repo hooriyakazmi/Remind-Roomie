@@ -446,23 +446,28 @@ button {
 }
 
 .status.pending {
-    background-color: #fff0cc;
-    color: #956a19;
+    background-color: #E5E4AE;
+    color: #000000;
 }
 
 .status.completed {
-    background-color: #d5eee2;
-    color: #316c56;
+    background-color: #C4D8A7;
+    color: #000000;
 }
 
 .status.accepted {
-    background-color: #d5eee2;
-    color: #316c56;
+    background-color: #c4ded1;
+    color: #000000;
 }
 
 .status.rejected {
-    background-color: #eeeeee;
-    color: #666666;
+    background-color: #c75959;
+    color: #000000;
+}
+
+.status.overdue {
+    background-color: #FFAFB0;
+    color: #000000;
 }
 
 .task-notifications,
@@ -535,7 +540,7 @@ button {
 
 .task-history .status.requested {
     background-color: #fff0cc;
-    color: #956a19;
+    color: #000000;
 }
 
 .task-list-card {
@@ -1810,7 +1815,7 @@ button {
 }
 
 .settings-message {
-    margin-top: 4px;
+    margin-top: 8px;
     font-size: 13px;
     color: #317a5f;
 }
