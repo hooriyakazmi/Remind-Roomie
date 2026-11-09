@@ -290,13 +290,30 @@ document.addEventListener("DOMContentLoaded", async function () {
                 // These tasks are yours, so they take your current color
                 const assignee = memberFor(meId);
                 card.style.backgroundColor = assignee?.secondary || "#fbe0fb";
+                // Profile circles for everyone on the task, stacked like the Tasks page
                 const avatar = document.createElement("div");
-                avatar.className = "event-avatar task-home-avatar";
-                avatar.style.backgroundColor = assignee?.color || "#f7dafa";
-                const icon = document.createElement("i");
-                icon.className = "fa-solid fa-list-check";
-                icon.setAttribute("aria-hidden", "true");
-                avatar.append(icon);
+                avatar.className = "home-event-avatars";
+                const people = (task.memberIds || []).map(memberFor).filter(Boolean);
+                const shown = people.length > 3 ? people.slice(0, 2) : people;
+                const overlap = shown.length === 3 ? "-14px" : "-8px";
+                (shown.length ? shown : [assignee]).forEach((member, index) => {
+                    const circle = document.createElement("div");
+                    circle.className = "event-avatar task-home-avatar";
+                    circle.style.backgroundColor = member?.color || "#f7dafa";
+                    circle.textContent = member?.initials || "?";
+                    if (index > 0) {
+                        circle.style.marginLeft = overlap;
+                    }
+                    avatar.append(circle);
+                });
+                if (people.length > shown.length) {
+                    const more = document.createElement("div");
+                    more.className = "event-avatar task-home-avatar";
+                    more.style.backgroundColor = "#eeeeee";
+                    more.style.marginLeft = "-8px";
+                    more.textContent = `+${people.length - shown.length}`;
+                    avatar.append(more);
+                }
                 const details = document.createElement("div");
                 details.className = "event-details";
                 const title = document.createElement("h4");
