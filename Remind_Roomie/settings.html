@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remind Roomie - Settings</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
+
+<body>
+
+    <main class="container">
+
+        <header class="page-header">
+            <h1 class="page-title">Settings</h1>
+            <p>Choose how you appear to your household.</p>
+        </header>
+
+        <section class="settings-card">
+            <h2>Your name</h2>
+            <form class="settings-form" id="settingsNameForm">
+                <label for="settingsName">Display name</label>
+                <input id="settingsName" type="text" maxlength="40" autocomplete="name">
+                <div class="member-form-actions">
+                    <button class="primary-button" type="submit">Save name</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="settings-card">
+            <h2>Your color</h2>
+            <p class="form-help">Your color appears on your events, your family card, and your profile. Colors already taken by a roommate are unavailable.</p>
+            <div class="color-grid" id="settingsColors">
+                <!-- Color options are added using JavaScript -->
+            </div>
+        </section>
+
+        <p class="settings-message" id="settingsMessage" role="status" hidden></p>
+
+    </main>
+
+    <div class="account-bar">
+        <span>Signed in as <strong id="accountName"></strong></span>
+        <button id="signOutButton" type="button">Sign out</button>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+
+        <a href="index.html">
+            <span><i class="fa-solid fa-house"></i></span>
+            Home
+        </a>
+
+        <a href="calendar.html">
+            <span><i class="fa-solid fa-calendar-days"></i></span>
+            Calendar
+        </a>
+
+        <a href="tasks.html">
+            <span><i class="fa-solid fa-list-check"></i></span>
+            Tasks
+        </a>
+
+        <a href="family.html">
+            <span><i class="fa-solid fa-users"></i></span>
+            Family
+        </a>
+
+        <a href="settings.html" class="active">
+            <span><i class="fa-solid fa-gear"></i></span>
+            Settings
+        </a>
+
+    </nav>
+
+    <script src="js/form-controls.js?v=20261108-controls-2"></script>
+    <script src="js/data.js?v=20261108-controls-2"></script>
+    <script src="js/script.js?v=20261108-controls-2"></script>
+
+</body>
+</html>

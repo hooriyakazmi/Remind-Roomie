@@ -26,11 +26,12 @@ service cloud.firestore {
 
     function profileHasRequiredFields(data) {
       return data.keys().hasAll(['email', 'displayName', 'householdId'])
-        && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId'])
+        && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId', 'color'])
         && data.email == request.auth.token.email
         && data.displayName is string
         && data.displayName.size() > 0
-        && (data.householdId == null || data.householdId is string);
+        && (data.householdId == null || data.householdId is string)
+        && (data.get('color', null) == null || (data.color is string && data.color.size() == 7));
     }
 
     // The household must be NEW and created in this same atomic batch.

@@ -65,6 +65,8 @@ window.roomieHouseholdReady = new Promise(resolve => {
       window.roomieCloud = createHouseholdCloud(profile.householdId, user, reportError);
       document.getElementById("accountName").textContent = name;
       offerLegacyImport(window.roomieCloud);
+      await window.roomieCloud.membersReady;
+      if (currentGeneration !== generation) return;
       resolve(window.roomieCloud);
     } catch (error) {
       if (currentGeneration !== generation) return;

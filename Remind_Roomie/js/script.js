@@ -28,6 +28,14 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     const storageKey = key => `${key}:${window.roomieCloud.user.uid}`;
 
+    // Identify people by account ID, so a rename doesn't detach their events or color.
+    // Older events were saved with names, so names still count as a match.
+    const meId = window.roomieCloud.user.uid;
+    const isMe = value => value === meId || value === householdData.user.name;
+    const memberFor = value => householdData.family.find(member => member.id === value || member.name === value);
+    const nameOf = value => memberFor(value)?.name || value;
+    const myColor = () => memberFor(meId)?.color || "";
+
     // Make sure the shared data file is loaded
     if (typeof householdData === "undefined") {
         console.error("householdData was not found. Check that data.js is loaded.");
@@ -45,8 +53,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         const homeTasks = document.getElementById("homeTasks");
 
         // Display user information
-        document.getElementById("profileAvatar").textContent =
-            householdData.user.initials;
+        const profileAvatar = document.getElementById("profileAvatar");
+        profileAvatar.textContent = householdData.user.initials;
+        profileAvatar.style.backgroundColor = myColor() || "";
 
         document.getElementById("greeting").textContent =
             householdData.user.greeting;
@@ -67,8 +76,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 
         const userName = householdData.user.name;
-        const currentUser = householdData.family.find(member => member.name === userName);
-        const memberForName = name => householdData.family.find(member => member.name === name);
+        const memberForName = memberFor;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const weekEnd = new Date(today);
@@ -78,7 +86,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const personalEvents = [
                 ...householdData.calendar.personal.map(event => ({
                     ...event,
-                    owner: userName
+                    owner: meId
                 }))
             ];
 
@@ -89,7 +97,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
                 personalEvents.push(...savedEvents
                     .filter(event => event.scope !== "shared")
-                    .map(event => ({ ...event, owner: userName })));
+                    .map(event => ({ ...event, owner: meId })));
             } catch (error) {
                 console.error("Could not load calendar events for the home page.", error);
             }
@@ -120,7 +128,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 .map(event => ({ ...event, ...(eventEdits[event.id] || {}) }))
                 .filter(event => {
                     const eventDate = new Date(`${event.date}T00:00:00`);
-                    return event.owner === userName && event.date &&
+                    return isMe(event.owner) && event.date &&
                         !Number.isNaN(eventDate.getTime()) &&
                         eventDate >= today && eventDate < weekEnd;
                 })
@@ -168,6 +176,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
         renderHomeEvents();
         window.addEventListener("roomie:local-events-updated", renderHomeEvents);
+        window.addEventListener("roomie:members-updated", renderHomeEvents);
 
         const assignedToCurrentUser = task => {
             if (task.memberIds?.length) return task.memberIds.includes(window.roomieCloud.user.uid);
@@ -216,7 +225,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const assignedNames = Array.isArray(task.assignedTo)
                     ? task.assignedTo
                     : String(task.assignedTo || "").split(",").map(name => name.trim());
-                const assignee = assignedNames.map(memberForName).find(Boolean) || currentUser;
+                // These tasks are yours, so they take your current color
+                const assignee = memberFor(meId);
                 card.style.backgroundColor = assignee?.secondary || "#fbe0fb";
                 const avatar = document.createElement("div");
                 avatar.className = "event-avatar task-home-avatar";
@@ -248,6 +258,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.addEventListener("roomie:tasks-updated", renderHomeTasks);
         window.addEventListener("roomie:members-updated", () => {
             householdData.family = window.roomieCloud.members;
+            profileAvatar.style.backgroundColor = myColor() || "";
             renderHomeTasks();
         });
 
@@ -394,17 +405,17 @@ document.addEventListener("DOMContentLoaded", async function () {
                 ...householdData.calendar.personal.map(event => ({
                     ...event,
                     kind: "personal",
-                    owner: householdData.user.name
+                    owner: meId
                 })),
                 ...householdData.calendar.housemates.map(event => ({ ...event, kind: "personal" })),
                 ...householdData.calendar.shared.map(event => ({
                     ...event,
                     kind: "family",
-                    owner: event.addedBy
+                    owner: event.createdBy || event.addedBy
                 })),
                 ...savedEvents.map(event => event.scope === "shared"
                     ? { ...event, kind: "family", owner: event.addedBy }
-                    : { ...event, kind: "personal", owner: householdData.user.name })
+                    : { ...event, kind: "personal", owner: meId })
             ];
         }
 
@@ -412,12 +423,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         // (events with no attendee list are shared with the whole family).
         // Shared tab: everyone's events.
         function visibleEvents() {
-            const me = householdData.user.name;
             return allEvents().filter(event => {
                 if (scope === "personal") {
-                    const isMine = event.kind === "personal" && event.owner === me;
+                    const isMine = event.kind === "personal" && isMe(event.owner);
                     const isIncluded = event.kind === "family" &&
-                        (!event.attendees?.length || event.attendees.includes(me));
+                        (!event.attendees?.length || event.attendees.some(isMe));
                     return isMine || isIncluded;
                 }
                 return true;
@@ -425,11 +435,18 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         function ownerOf(event) {
-            return householdData.family.find(member => member.name === event.owner);
+            return memberFor(event.owner);
+        }
+
+        // The person an event is for: the first attendee who isn't the creator.
+        // Events with no one else listed (your own, or family-wide) use the creator.
+        function recipientOf(event) {
+            const recipientId = (event.attendees || []).find(value => memberFor(value) && value !== event.owner);
+            return memberFor(recipientId) || ownerOf(event);
         }
 
         function ownerColor(event) {
-            return ownerOf(event)?.color || "#f7dafa";
+            return recipientOf(event)?.color || "#f7dafa";
         }
 
         function eventsOn(dateISO) {
@@ -538,7 +555,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         function createEventCard(event) {
             const card = document.createElement("article");
-            const owner = ownerOf(event);
+            const owner = recipientOf(event);
             card.className = `cal-event ${event.kind}`;
             card.style.backgroundColor = owner?.secondary || "#fbe0fb";
 
@@ -558,11 +575,11 @@ document.addEventListener("DOMContentLoaded", async function () {
             title.textContent = event.title;
 
             const meta = document.createElement("p");
-            const showOwner = event.kind === "personal" && event.owner !== householdData.user.name;
+            const showOwner = event.kind === "personal" && !isMe(event.owner);
             meta.textContent = [
-                showOwner ? event.owner : "",
+                showOwner ? nameOf(event.owner) : "",
                 event.location,
-                event.kind === "family" ? `Added by ${event.owner}` : ""
+                event.kind === "family" ? `Added by ${nameOf(event.owner)}` : ""
             ].filter(Boolean).join(" · ");
 
             details.append(title, meta);
@@ -633,8 +650,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const checkbox = document.createElement("input");
                 checkbox.type = "checkbox";
                 checkbox.name = "eventAssignee";
-                checkbox.value = member.name;
-                checkbox.checked = member.name === householdData.user.name;
+                checkbox.value = member.id;
+                checkbox.checked = member.id === meId;
 
                 const avatar = document.createElement("span");
                 avatar.className = "cal-assignee-avatar";
@@ -715,10 +732,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const isOwner = event._remote
                 ? event.createdBy === window.roomieCloud.user.uid
-                : event.owner === householdData.user.name;
-            const owner = ownerOf(event);
+                : isMe(event.owner);
+            const owner = recipientOf(event);
 
-            // Hero card, tinted with the owner's secondary color
+            // Hero card, tinted with the recipient's secondary color
             eventHero.style.backgroundColor = owner?.secondary || "#fbe0fb";
             eventHero.replaceChildren();
 
@@ -789,11 +806,11 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
 
             const sharedWith = event.attendees?.length
-                ? `Shared with ${event.attendees.join(", ")}`
+                ? `Shared with ${event.attendees.map(nameOf).join(", ")}`
                 : "Shared with the family";
             let who = event.kind === "family"
-                ? `${sharedWith} · added by ${event.owner}`
-                : `${event.owner}'s personal event`;
+                ? `${sharedWith} · added by ${nameOf(event.owner)}`
+                : `${nameOf(event.owner)}'s personal event`;
             if (event.kind === "personal" && event.sharedWithFamily) {
                 who += " · shared with the family";
             }
@@ -1026,7 +1043,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 description: eventDescription.value.trim(),
                 addedBy: householdData.user.name,
                 attendees,
-                scope: attendees.length === 1 && attendees[0] === householdData.user.name
+                scope: attendees.length === 1 && isMe(attendees[0])
                     ? "personal"
                     : "shared"
             };
@@ -1065,7 +1082,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             householdData.calendar.shared = window.roomieCloud.events.map(event => ({
                 ...event,
                 kind: "family",
-                owner: event.addedBy
+                owner: event.createdBy || event.addedBy
             }));
             render();
             if (openEventId && !editingEvent) {
@@ -1383,9 +1400,15 @@ document.addEventListener("DOMContentLoaded", async function () {
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "Household").split(",").map(name => name.trim()).filter(Boolean);
-            const assignees = [...new Set(assignedNames)]
-                .map(name => familyMembers.find(person => person.name === name))
-                .filter(Boolean);
+            // Match by account first, so a renamed person keeps their color on old tasks
+            const assignees = familyMembers.filter(person =>
+                task.memberIds?.includes(person.id) || assignedNames.includes(person.name)
+            );
+
+            // The card takes the color of the person the task is for, not the person who assigned it
+            if (assignees[0]?.secondary) {
+                card.style.backgroundColor = assignees[0].secondary;
+            }
  
             function buildAvatar(member, fallbackName) {
                 const circle = document.createElement("span");
@@ -1674,6 +1697,91 @@ document.addEventListener("DOMContentLoaded", async function () {
     // FAMILY PAGE
     // --------------------------------
 
+    // --------------------------------
+    // SETTINGS PAGE
+    // --------------------------------
+
+    const settingsPage = document.getElementById("settingsPage");
+
+    if (settingsPage) {
+        const nameForm = document.getElementById("settingsNameForm");
+        const nameInput = document.getElementById("settingsName");
+        const colorGrid = document.getElementById("settingsColors");
+        const settingsMessage = document.getElementById("settingsMessage");
+
+        function showSettingsMessage(message, isError = false) {
+            settingsMessage.textContent = message;
+            settingsMessage.classList.toggle("is-error", isError);
+            settingsMessage.hidden = false;
+        }
+
+        // Each color can belong to one person; taken colors are shown but disabled
+        function renderColors() {
+            const me = memberFor(meId);
+            colorGrid.replaceChildren();
+
+            householdData.colorPalette.forEach(swatch => {
+                const owner = householdData.family.find(member =>
+                    member.id !== meId && member.color === swatch.color
+                );
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "color-swatch";
+                button.style.backgroundColor = swatch.color;
+                button.setAttribute("aria-pressed", String(me?.color === swatch.color));
+                button.disabled = Boolean(owner);
+                button.title = owner ? `Taken by ${owner.name}` : "Use this color";
+                button.setAttribute("aria-label", owner ? `Taken by ${owner.name}` : "Use this color");
+                button.addEventListener("click", () => saveColor(swatch.color));
+                colorGrid.append(button);
+            });
+        }
+
+        function renderName() {
+            if (document.activeElement !== nameInput) {
+                nameInput.value = memberFor(meId)?.name || householdData.user.name;
+            }
+        }
+
+        async function saveColor(color) {
+            try {
+                await window.roomieCloud.updateProfile({ color });
+                showSettingsMessage("Color saved.");
+            } catch (error) {
+                console.error("Could not save the color.", error);
+                showSettingsMessage("Could not save your color. Please try again.", true);
+            }
+        }
+
+        nameForm.addEventListener("submit", async event => {
+            event.preventDefault();
+            const name = nameInput.value.trim();
+            if (!name) {
+                nameInput.focus();
+                showSettingsMessage("Enter a name.", true);
+                return;
+            }
+
+            try {
+                await window.roomieCloud.updateProfile({ displayName: name });
+                householdData.user.name = name;
+                showSettingsMessage("Name saved.");
+            } catch (error) {
+                console.error("Could not save the name.", error);
+                showSettingsMessage("Could not save your name. Please try again.", true);
+            }
+        });
+
+        function renderSettings() {
+            renderName();
+            renderColors();
+        }
+
+        window.addEventListener("roomie:members-updated", renderSettings);
+        renderSettings();
+    }
+
     const familyList = document.getElementById("familyList");
 
     if (familyList) {
@@ -1698,6 +1806,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const avatar = document.createElement("div");
                 avatar.className = "task-avatar";
                 avatar.textContent = member.initials || member.name.charAt(0).toUpperCase();
+                if (member.color) {
+                    avatar.style.backgroundColor = member.color;
+                }
                 const info = document.createElement("div");
                 info.className = "task-info";
                 const name = document.createElement("h4");

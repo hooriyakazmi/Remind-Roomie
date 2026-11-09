@@ -47,7 +47,6 @@ button {
     width: 56px;
     height: 56px;
     flex-shrink: 0;
-    background-color: #ffcc00;
     border-radius: 50%;
     display: flex;
     justify-content: center;
@@ -1589,6 +1588,86 @@ button {
 
 .cal-danger {
     background-color: #9c2f2f;
+}
+
+/* ==============================
+   SETTINGS PAGE
+============================== */
+
+.settings-card {
+    margin-bottom: 16px;
+    padding: 18px;
+    border-radius: 20px;
+    background-color: white;
+}
+
+.settings-card h2 {
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.settings-card .form-help {
+    margin-top: 6px;
+}
+
+.settings-form {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.settings-form label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.settings-form input {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background-color: #fbfcfb;
+    font: inherit;
+}
+
+.settings-form input:focus {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.color-swatch {
+    width: 100%;
+    aspect-ratio: 1;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px #d6ddda;
+}
+
+.color-swatch[aria-pressed="true"] {
+    box-shadow: 0 0 0 3px #17675b;
+}
+
+.color-swatch:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.settings-message {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #317a5f;
+}
+
+.settings-message.is-error {
+    color: #9c2f2f;
 }
 
 /* ==============================

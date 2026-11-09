@@ -78,6 +78,37 @@ export async function joinHousehold(householdId, code, user) {
   await batch.commit();
 }
 
+// Save the signed-in user's own name and/or color. Other members' profiles stay read-only.
+export async function updateMyProfile(user, changes) {
+  if (changes.displayName) {
+    await updateProfile(user, { displayName: changes.displayName });
+  }
+  await updateDoc(doc(db, "users", user.uid), changes);
+}
+
+// The default color for a member: the first palette color, starting from a point
+// chosen by the user ID, that no other member has saved. Every page computes the same value.
+function defaultColorFor(uid, members) {
+  const palette = window.householdData?.colorPalette || [];
+  const taken = new Set(members.filter(member => member.id !== uid).map(member => member.color).filter(Boolean));
+  const seed = [...uid].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const ordered = palette.map((_, index) => palette[(seed + index) % palette.length]);
+  return ordered.find(item => !taken.has(item.color))?.color || "";
+}
+
+// Save the default for the signed-in user once, if they don't have a color yet.
+function assignDefaultColor(members, user) {
+  const me = members.find(member => member.id === user.uid);
+  if (!me || me.color) return;
+
+  const color = defaultColorFor(user.uid, members);
+  if (!color) return;
+
+  updateDoc(doc(db, "users", user.uid), { color }).catch(error => {
+    console.error("Could not assign a default color.", error);
+  });
+}
+
 // Share only member profiles with people whose profile already belongs to this household.
 export function listenToHouseholdMembers(householdId, callback, onError) {
   const membersQuery = query(
@@ -85,7 +116,7 @@ export function listenToHouseholdMembers(householdId, callback, onError) {
     where("householdId", "==", householdId)
   );
   return onSnapshot(membersQuery, snapshot => {
-    callback(snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
+    callback(snapshot.docs.map(item => ({ ...item.data(), id: item.id })), snapshot.metadata?.fromCache);
   }, onError);
 }
 
@@ -127,6 +158,12 @@ export function createHouseholdCloud(householdId, user, onError) {
   cloud.addEvent = event => addHouseholdEvent(householdId, event);
   cloud.updateEvent = (eventId, changes) => updateHouseholdEvent(householdId, eventId, changes);
   cloud.deleteEvent = eventId => deleteHouseholdEvent(householdId, eventId);
+  cloud.updateProfile = changes => updateMyProfile(user, changes);
+
+  // Resolves with the first member list, so pages don't draw before colors are known
+  cloud.membersReady = new Promise(resolve => {
+    cloud.markMembersReady = resolve;
+  });
   cloud.stop = [
     listenToTasks(householdId, tasks => {
       cloud.tasks = tasks.map(task => ({
@@ -142,17 +179,27 @@ export function createHouseholdCloud(householdId, user, onError) {
       window.householdData.calendar.shared = events.map(event => ({
         ...event,
         kind: "family",
-        owner: event.addedBy
+        owner: event.createdBy || event.addedBy
       }));
       window.dispatchEvent(new CustomEvent("roomie:events-updated"));
     }, onError),
-    listenToHouseholdMembers(householdId, members => {
-      cloud.members = members.map(member => ({
-        id: member.id,
-        name: member.displayName || "Roommate",
-        role: member.id === user.uid ? "You" : "Roommate",
-        initials: (member.displayName || "Roommate").charAt(0).toUpperCase()
-      }));
+    listenToHouseholdMembers(householdId, (members, fromCache) => {
+      // Cached data can be missing other people's colors, so only assign from server data
+      if (!fromCache) assignDefaultColor(members, user);
+      const palette = window.householdData?.colorPalette || [];
+      cloud.members = members.map(member => {
+        const name = member.displayName || "Roommate";
+        const color = member.color || defaultColorFor(member.id, members);
+        return {
+          id: member.id,
+          name,
+          role: member.id === user.uid ? "You" : "Roommate",
+          initials: name.charAt(0).toUpperCase(),
+          color,
+          secondary: palette.find(item => item.color === color)?.secondary || ""
+        };
+      });
+      cloud.markMembersReady();
       window.householdData.family = cloud.members;
       window.dispatchEvent(new CustomEvent("roomie:members-updated"));
     }, onError)
