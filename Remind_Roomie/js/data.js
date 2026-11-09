@@ -4,7 +4,7 @@ const householdData = {
     colorPalette: [
         { color: "#C0E4A4", secondary: "#dff5d0" },
         { color: "#B9C8FC", secondary: "#D9E2FF" },
-        { color: "#B2E6EF", secondary: "#CDE7EC" },
+        { color: "#90cdd8", secondary: "#CDE7EC" },
         { color: "#E8C2E8", secondary: "#FBE0FB" },
         { color: "#E8A6A7", secondary: "#F3C4C5" },
         { color: "#EDED97", secondary: "#FBFFD0" },
