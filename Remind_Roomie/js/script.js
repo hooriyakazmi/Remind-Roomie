@@ -39,9 +39,171 @@ document.addEventListener("DOMContentLoaded", async function () {
     const memberFor = value => householdData.family.find(member => member.id === value || member.name === value);
     const nameOf = value => memberFor(value)?.name || value;
     const myColor = () => memberFor(meId)?.color || "";
+    const eventAddedBy = event => nameOf(event.createdBy || event.addedBy || event.owner || meId) || "Household";
+    const setMemberCardColor = (element, member, fallback = "#fbe0fb") => {
+        element.style.setProperty("--member-card-color", member?.secondary || fallback);
+    };
+    const setMemberAvatarColor = (element, member, fallback = "#f7dafa") => {
+        element.style.setProperty("--member-profile-color", member?.color || fallback);
+    };
+
+    function createMemberAvatar(member, className, fallback = "?", tagName = "span", colorFallback = "#f7dafa") {
+        const avatar = document.createElement(tagName);
+        avatar.className = `${className} roomie-person-avatar`;
+        setMemberAvatarColor(avatar, member, colorFallback);
+        avatar.textContent = member?.initials || fallback;
+        return avatar;
+    }
+
+    function createAttribution(name, tagName = "p") {
+        const attribution = document.createElement(tagName);
+        attribution.className = "item-attribution";
+        attribution.textContent = `Added by ${name}`;
+        return attribution;
+    }
+
+    function renderDetailRows(container, rows) {
+        container.replaceChildren();
+        rows.forEach(([icon, labelText, value]) => {
+            const row = document.createElement("div");
+            row.className = "cal-detail-row";
+
+            const iconBox = document.createElement("span");
+            iconBox.className = "cal-detail-icon";
+            const iconEl = document.createElement("i");
+            iconEl.className = `fa-solid ${icon}`;
+            iconEl.setAttribute("aria-hidden", "true");
+            iconBox.append(iconEl);
+
+            const text = document.createElement("div");
+            const labelEl = document.createElement("p");
+            labelEl.className = "cal-detail-label";
+            labelEl.textContent = labelText;
+            const valueEl = document.createElement("p");
+            valueEl.className = "cal-detail-value";
+            valueEl.textContent = value;
+            text.append(labelEl, valueEl);
+
+            row.append(iconBox, text);
+            container.append(row);
+        });
+    }
+
+    function createDetailHeroDate(labelText, valueText) {
+        const dateBox = document.createElement("div");
+        dateBox.className = "cal-hero-day";
+
+        const label = document.createElement("span");
+        label.textContent = labelText;
+        const value = document.createElement("strong");
+        value.textContent = valueText;
+        dateBox.append(label, value);
+        return dateBox;
+    }
 
     // Tasks store their creator's account ID, so the name shown follows renames
     const assignedByName = task => (task.assignedById ? nameOf(task.assignedById) : task.assignedBy) || "Household";
+
+    function taskDueDateTime(task) {
+        const dueDate = task.date || task.dueDate;
+        if (!dueDate) {
+            return Number.POSITIVE_INFINITY;
+        }
+
+        const normalizedDate = String(dueDate).trim();
+        const relativeDate = normalizedDate.toLowerCase();
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)
+            ? new Date(`${normalizedDate}T00:00:00`)
+            : relativeDate === "today"
+                ? new Date(new Date().setHours(0, 0, 0, 0))
+                : relativeDate === "tomorrow"
+                    ? new Date(new Date().setHours(0, 0, 0, 0) + 24 * 60 * 60 * 1000)
+                    : new Date(normalizedDate);
+        if (Number.isNaN(date.getTime())) {
+            return Number.POSITIVE_INFINITY;
+        }
+
+        const time = task.time || task.dueTime || "";
+        const match = String(time).match(/^(\d{1,2}):(\d{2})$/);
+        if (match) {
+            date.setHours(Number(match[1]), Number(match[2]), 0, 0);
+        }
+        return date.getTime();
+    }
+
+    const sortTasksByDueDate = tasks => tasks.sort((a, b) => taskDueDateTime(a) - taskDueDateTime(b));
+
+    function formatTaskDue(task) {
+        const dueDate = task.date || task.dueDate;
+        if (!dueDate) {
+            return "No due date";
+        }
+
+        const timeText = formatTaskDueTime(task);
+
+        if (!task.date) {
+            const dueTime = timeText ? ` · ${timeText}` : "";
+            return `Due ${dueDate}${dueTime}`;
+        }
+
+        const date = new Date(`${task.date}T00:00:00`);
+        const dateText = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return `Due ${dateText}${timeText ? ` · ${timeText}` : ""}`;
+    }
+
+    function formatTaskDueDate(task) {
+        return formatTaskDue(task).replace(/^Due /, "").split(" · ")[0];
+    }
+
+    function formatTaskDueTime(task) {
+        const time = task.time || task.dueTime || "";
+        const match = String(time).match(/^(\d{1,2}):(\d{2})$/);
+        return match
+            ? new Date(`2000-01-01T${time}`).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit"
+            })
+            : String(time);
+    }
+
+    function formatEventDate(dateISO) {
+        return new Date(`${dateISO}T00:00:00`).toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric"
+        });
+    }
+
+    function isTaskDueToday(task, today = new Date()) {
+        const dueDate = task.date || task.dueDate;
+        if (!dueDate) {
+            return false;
+        }
+
+        const normalizedDate = String(dueDate).trim();
+        const relativeDate = normalizedDate.toLowerCase();
+        const todayStart = new Date(today);
+        todayStart.setHours(0, 0, 0, 0);
+
+        let date;
+        if (relativeDate === "today") {
+            return true;
+        } else if (relativeDate === "tomorrow") {
+            return false;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+            date = new Date(`${normalizedDate}T00:00:00`);
+        } else {
+            const dateWithYear = /\b\d{4}\b/.test(normalizedDate)
+                ? normalizedDate
+                : `${normalizedDate} ${todayStart.getFullYear()}`;
+            date = new Date(dateWithYear);
+        }
+
+        return !Number.isNaN(date.getTime()) &&
+            date.getFullYear() === todayStart.getFullYear() &&
+            date.getMonth() === todayStart.getMonth() &&
+            date.getDate() === todayStart.getDate();
+    }
 
     // Keep your name current everywhere it's shown, including after a change in Settings
     function refreshMyName() {
@@ -161,20 +323,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (eventsThisWeek.length) {
                 eventsThisWeek.forEach(event => {
                     const card = document.createElement("article");
-                    card.className = "event-card";
+                    card.className = "event-card roomie-card roomie-event-card roomie-person-card";
                     // Color by the person the event is for, the same as the calendar
                     const owner = (event.attendees || []).map(memberFor)
                         .find(member => member && member.id !== event.owner) || memberFor(event.owner);
-                    card.style.backgroundColor = owner?.secondary || "#fbe0fb";
+                    setMemberCardColor(card, owner);
                     // One circle per person, the same as the calendar cards
                     const avatar = document.createElement("div");
                     avatar.className = "home-event-avatars";
                     const makeCircle = member => {
-                        const circle = document.createElement("div");
-                        circle.className = "event-avatar";
-                        circle.style.backgroundColor = member?.color || "#f7dafa";
-                        circle.textContent = member?.initials || "?";
-                        return circle;
+                        return createMemberAvatar(member, "event-avatar", "?", "div");
                     };
                     const isFamilyWide = event.kind === "family" && (!event.attendees?.length ||
                         householdData.family.every(member => member.id === event.owner || event.attendees.includes(member.id)));
@@ -211,12 +369,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                     const title = document.createElement("h4");
                     title.textContent = event.title;
                     const date = document.createElement("p");
-                    const eventDate = new Date(`${event.date}T00:00:00`);
-                    const dateText = eventDate.toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric"
-                    });
+                    date.className = "roomie-due-date";
+                    const dateText = formatEventDate(event.date);
                     const timeText = event.time
                         ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", {
                             hour: "numeric",
@@ -225,7 +379,21 @@ document.addEventListener("DOMContentLoaded", async function () {
                         : "All day";
                     date.textContent = `${dateText} · ${timeText}`;
                     details.append(title, date);
+                    details.append(createAttribution(eventAddedBy(event)));
                     card.append(avatar, details);
+                    card.tabIndex = 0;
+                    card.setAttribute("role", "button");
+                    card.setAttribute("aria-label", `View event details: ${event.title}`);
+                    const openEventDetails = () => {
+                        window.location.href = `calendar.html?event=${encodeURIComponent(event.id)}`;
+                    };
+                    card.addEventListener("click", openEventDetails);
+                    card.addEventListener("keydown", keyEvent => {
+                        if (["Enter", " "].includes(keyEvent.key)) {
+                            keyEvent.preventDefault();
+                            openEventDetails();
+                        }
+                    });
                     homeEvents.append(card);
                 });
             } else {
@@ -247,33 +415,16 @@ document.addEventListener("DOMContentLoaded", async function () {
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
             return assignedNames.includes(userName) || assignedNames.includes("Household");
         };
-        const formatTaskDue = task => {
-            if (task.date) {
-                const dueDate = new Date(`${task.date}T00:00:00`);
-                const dateText = dueDate.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric"
-                });
-                const timeText = task.time
-                    ? ` · ${new Date(`2000-01-01T${task.time}`).toLocaleTimeString("en-US", {
-                        hour: "numeric",
-                        minute: "2-digit"
-                    })}`
-                    : "";
-                return `Due ${dateText}${timeText}`;
-            }
-            return task.dueDate
-                ? `Due ${task.dueDate}${task.dueTime ? ` · ${task.dueTime}` : ""}`
-                : "No due date";
-        };
-
         function renderHomeTasks() {
             homeTasks.replaceChildren();
             const tasks = window.roomieCloud.tasks;
-            const completed = tasks.filter(task => task.status === "completed").length;
-            const total = tasks.length;
+            const todayTasks = tasks.filter(task =>
+                assignedToCurrentUser(task) && task.status !== "rejected" && isTaskDueToday(task)
+            );
+            const completed = todayTasks.filter(task => task.status === "completed").length;
+            const total = todayTasks.length;
             const percentage = total ? Math.round(completed / total * 100) : 0;
-            document.getElementById("taskProgress").textContent = `${completed} of ${total} tasks completed`;
+            document.getElementById("taskProgress").textContent = `${completed} of ${total} tasks due today completed`;
             document.getElementById("progressPercentage").textContent = `${percentage}%`;
             document.getElementById("progressRing").style.background =
                 `conic-gradient(#357266 ${percentage}%, #ffffff ${percentage}%)`;
@@ -281,15 +432,15 @@ document.addEventListener("DOMContentLoaded", async function () {
                 .filter(task => assignedToCurrentUser(task) && ["requested", "accepted"].includes(task.status));
 
             if (myTasks.length) {
-            myTasks.forEach(task => {
+            sortTasksByDueDate(myTasks).forEach(task => {
                 const card = document.createElement("article");
-                card.className = "event-card";
+                card.className = "event-card roomie-card roomie-task-card roomie-person-card";
                 const assignedNames = Array.isArray(task.assignedTo)
                     ? task.assignedTo
                     : String(task.assignedTo || "").split(",").map(name => name.trim());
                 // These tasks are yours, so they take your current color
                 const assignee = memberFor(meId);
-                card.style.backgroundColor = assignee?.secondary || "#fbe0fb";
+                setMemberCardColor(card, assignee);
                 // Profile circles for everyone on the task, stacked like the Tasks page
                 const avatar = document.createElement("div");
                 avatar.className = "home-event-avatars";
@@ -297,10 +448,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const shown = people.length > 3 ? people.slice(0, 2) : people;
                 const overlap = shown.length === 3 ? "-14px" : "-8px";
                 (shown.length ? shown : [assignee]).forEach((member, index) => {
-                    const circle = document.createElement("div");
-                    circle.className = "event-avatar task-home-avatar";
-                    circle.style.backgroundColor = member?.color || "#f7dafa";
-                    circle.textContent = member?.initials || "?";
+                    const circle = createMemberAvatar(member, "event-avatar task-home-avatar", "?", "div");
                     if (index > 0) {
                         circle.style.marginLeft = overlap;
                     }
@@ -319,10 +467,25 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const title = document.createElement("h4");
                 title.textContent = task.title;
                 const due = document.createElement("p");
+                due.className = "roomie-due-date";
                 const status = String(task.status || "requested").toLowerCase();
                 due.textContent = `${formatTaskDue(task)} · ${status.charAt(0).toUpperCase()}${status.slice(1)}`;
                 details.append(title, due);
+                details.append(createAttribution(assignedByName(task)));
                 card.append(avatar, details);
+                card.tabIndex = 0;
+                card.setAttribute("role", "button");
+                card.setAttribute("aria-label", `View task details: ${task.title}`);
+                const openTaskDetails = () => {
+                    window.location.href = `tasks.html?task=${encodeURIComponent(task.id)}`;
+                };
+                card.addEventListener("click", openTaskDetails);
+                card.addEventListener("keydown", event => {
+                    if (["Enter", " "].includes(event.key)) {
+                        event.preventDefault();
+                        openTaskDetails();
+                    }
+                });
                 homeTasks.append(card);
             });
             } else {
@@ -393,6 +556,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         let openEventId = null;
         let editingEvent = false;
         let scope = "personal";
+        const requestedEventId = new URLSearchParams(window.location.search).get("event");
 
         function toISODate(date) {
             const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -667,19 +831,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         function createEventCard(event) {
             const card = document.createElement("article");
             const owner = recipientOf(event);
-            card.className = `cal-event ${event.kind}`;
-            card.style.backgroundColor = owner?.secondary || "#fbe0fb";
+            card.className = `cal-event ${event.kind} roomie-card roomie-event-card roomie-person-card`;
+            setMemberCardColor(card, owner);
 
             // One circle per person assigned, overlapping like the task cards
             const avatar = document.createElement("span");
             avatar.className = "cal-event-avatars";
 
             function buildCircle(member) {
-                const circle = document.createElement("span");
-                circle.className = "cal-event-avatar";
-                circle.style.backgroundColor = member?.color || "#f7dafa";
-                circle.textContent = member?.initials || "?";
-                return circle;
+                return createMemberAvatar(member, "cal-event-avatar");
             }
 
             const time = document.createElement("span");
@@ -692,15 +852,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             const title = document.createElement("h4");
             title.textContent = event.title;
 
-            const meta = document.createElement("p");
-            const showOwner = event.kind === "personal" && !isMe(event.owner);
-            meta.textContent = [
-                showOwner ? nameOf(event.owner) : "",
-                event.location,
-                event.kind === "family" ? `Added by ${nameOf(event.owner)}` : ""
-            ].filter(Boolean).join(" · ");
+            const date = document.createElement("p");
+            date.className = "cal-event-date roomie-due-date";
+            date.textContent = formatEventDate(event.date);
 
-            details.append(title, meta);
+            const meta = document.createElement("p");
+            meta.textContent = event.location || "";
+
+            details.append(title, date);
+            if (event.location) {
+                details.append(meta);
+            }
+            details.append(createAttribution(eventAddedBy(event)));
 
             if (event.description) {
                 const description = document.createElement("p");
@@ -711,18 +874,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             card.append(avatar, details, time);
 
-            // Only events assigned to several people (or the whole family) get the family icon.
-            // Everyone listed counts, including you
-            const listedPeople = new Set(event.attendees || []).size;
-            const isSharedWithSeveral = (event.kind === "family" && (!event.attendees?.length || listedPeople > 1))
-                || (event.kind === "task" && listedPeople > 1);
             // Events shared with the whole family show the family icon in place of the initial
             const isFamilyWide = event.kind === "family" && (!event.attendees?.length ||
                 householdData.family.every(member => member.id === event.owner || event.attendees.includes(member.id)));
             if (isFamilyWide) {
                 const familyCircle = buildCircle(null);
                 familyCircle.textContent = "";
-                familyCircle.style.backgroundColor = owner?.color || "#f7dafa";
+                setMemberAvatarColor(familyCircle, owner);
                 const familyAvatarIcon = document.createElement("i");
                 familyAvatarIcon.className = "fa-solid fa-users";
                 familyAvatarIcon.setAttribute("aria-hidden", "true");
@@ -747,13 +905,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                     more.style.marginLeft = "-8px";
                     avatar.append(more);
                 }
-            }
-
-            if (!isFamilyWide && (isSharedWithSeveral || event.sharedWithFamily)) {
-                const familyIcon = document.createElement("i");
-                familyIcon.className = "fa-solid fa-users cal-family-icon";
-                familyIcon.setAttribute("aria-label", "Shared with the family");
-                card.append(familyIcon);
             }
 
             card.tabIndex = 0;
@@ -809,16 +960,18 @@ document.addEventListener("DOMContentLoaded", async function () {
                 checkbox.value = member.id;
                 checkbox.checked = selectedIds.includes(member.id);
 
-                const avatar = document.createElement("span");
-                avatar.className = "cal-assignee-avatar";
+                const avatar = createMemberAvatar(
+                    member,
+                    "cal-assignee-avatar",
+                    "",
+                    "span",
+                    "#e7d9f5"
+                );
                 if (member.photo) {
                     const image = document.createElement("img");
                     image.src = member.photo;
                     image.alt = "";
                     avatar.append(image);
-                } else {
-                    avatar.textContent = member.initials;
-                    avatar.style.backgroundColor = member.color || "#e7d9f5";
                 }
 
                 const name = document.createElement("span");
@@ -863,6 +1016,23 @@ document.addEventListener("DOMContentLoaded", async function () {
             window.scrollTo(0, 0);
         }
 
+        function openRequestedEvent() {
+            if (!requestedEventId) {
+                return;
+            }
+            const event = allEvents().find(item => String(item.id) === requestedEventId);
+            if (!event) {
+                return;
+            }
+            if (!visibleEvents().some(item => String(item.id) === requestedEventId)) {
+                setScope("shared");
+            }
+            openEvent(event.id);
+            const url = new URL(window.location.href);
+            url.searchParams.delete("event");
+            window.history.replaceState({}, "", url);
+        }
+
         function formatShortDay(dateISO) {
             if (dateISO === todayISO) {
                 return "Today";
@@ -892,7 +1062,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             const owner = recipientOf(event);
 
             // Hero card, tinted with the recipient's secondary color
-            eventHero.style.backgroundColor = owner?.secondary || "#fbe0fb";
+            eventHero.classList.add("roomie-card", "roomie-person-card");
+            setMemberCardColor(eventHero, owner);
             eventHero.replaceChildren();
 
             const top = document.createElement("div");
@@ -935,15 +1106,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             heroTitle.className = "cal-hero-title";
             heroTitle.textContent = event.title;
 
-            const dayBox = document.createElement("div");
-            dayBox.className = "cal-hero-day";
-            const dayLabel = document.createElement("span");
-            dayLabel.textContent = "Day";
-            const dayValue = document.createElement("strong");
-            dayValue.textContent = formatShortDay(event.date);
-            dayBox.append(dayLabel, dayValue);
-
-            body.append(heroTitle, dayBox);
+            body.append(heroTitle, createDetailHeroDate("Date", formatShortDay(event.date)));
             eventHero.append(top, body);
 
             // Edit form, or the read-only details
@@ -965,50 +1128,26 @@ document.addEventListener("DOMContentLoaded", async function () {
                 return;
             }
 
-            const sharedWith = event.attendees?.length
-                ? `Shared with ${event.attendees.map(nameOf).join(", ")}`
-                : "Shared with the family";
-            let who = event.kind === "task"
-                ? `Household task · assigned by ${nameOf(event.owner)}`
-                : event.kind === "family"
-                ? `${sharedWith} · added by ${nameOf(event.owner)}`
-                : `${nameOf(event.owner)}'s personal event`;
-            if (event.kind === "personal" && event.sharedWithFamily) {
-                who += " · shared with the family";
-            }
-
             const rows = [
                 ["fa-calendar-day", "Date", formatDay(event.date)],
-                ["fa-clock", "Time", formatTimeRange(event)],
-                ["fa-location-dot", "Location", event.location || "No location"],
-                ["fa-align-left", "Description", event.description || "No description"],
-                ["fa-user", "Who", who]
+                ["fa-clock", "Time", formatTimeRange(event)]
             ];
+            if (event.kind === "family" || event.sharedWithFamily) {
+                rows.push([
+                    "fa-user-group",
+                    "Shared with",
+                    event.attendees?.length
+                        ? event.attendees.map(nameOf).join(", ")
+                        : "The family"
+                ]);
+            }
+            rows.push(["fa-location-dot", "Location", event.location || "No location"]);
+            rows.push(
+                ["fa-user", "Added by", eventAddedBy(event)],
+                ["fa-align-left", "Description", event.description || "No description"]
+            );
 
-            eventDetailCard.replaceChildren();
-            rows.forEach(([icon, labelText, value]) => {
-                const row = document.createElement("div");
-                row.className = "cal-detail-row";
-
-                const iconBox = document.createElement("span");
-                iconBox.className = "cal-detail-icon";
-                const iconEl = document.createElement("i");
-                iconEl.className = `fa-solid ${icon}`;
-                iconEl.setAttribute("aria-hidden", "true");
-                iconBox.append(iconEl);
-
-                const text = document.createElement("div");
-                const labelEl = document.createElement("p");
-                labelEl.className = "cal-detail-label";
-                labelEl.textContent = labelText;
-                const valueEl = document.createElement("p");
-                valueEl.className = "cal-detail-value";
-                valueEl.textContent = value;
-                text.append(labelEl, valueEl);
-
-                row.append(iconBox, text);
-                eventDetailCard.append(row);
-            });
+            renderDetailRows(eventDetailCard, rows);
         }
 
         function openDeleteModal(id) {
@@ -1277,6 +1416,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 owner: event.createdBy || event.addedBy
             }));
             render();
+            openRequestedEvent();
             if (openEventId && !editingEvent) {
                 renderDetail();
             }
@@ -1287,6 +1427,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             loadEventEdits();
             loadDeletedEvents();
             render();
+            openRequestedEvent();
         });
         window.addEventListener("storage", event => {
             if ([calendarStorageKey, editsStorageKey, deletedStorageKey].includes(event.key) || event.key === null) {
@@ -1294,12 +1435,14 @@ document.addEventListener("DOMContentLoaded", async function () {
                 loadEventEdits();
                 loadDeletedEvents();
                 render();
+                openRequestedEvent();
             }
         });
         window.addEventListener("roomie:members-updated", () => {
             householdData.family = window.roomieCloud.members;
             renderEventAssignees();
             render();
+            openRequestedEvent();
             if (openEventId && !editingEvent) {
                 renderDetail();
             }
@@ -1511,6 +1654,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     if (taskRequests) {
         const taskListView = document.getElementById("taskListView");
+        const taskDetailView = document.getElementById("taskDetailView");
+        const taskDetailHero = document.getElementById("taskDetailHero");
+        const taskDetailCard = document.getElementById("taskDetailCard");
         const yourTasksList = document.getElementById("yourTasks");
         const allTasksList = document.getElementById("allTasks");
         const yourTasksSection = document.getElementById("yourTasksSection");
@@ -1529,6 +1675,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         let familyMembers = [...householdData.family];
         let assignedTasks = [];
         let feedback = null;
+        let openTaskId = null;
+        let requestedTaskId = new URLSearchParams(window.location.search).get("task");
         let loadError = "";
 
         function memberId(member, index) {
@@ -1536,30 +1684,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         function allTasks() {
-            return assignedTasks.map(task => ({
+            return sortTasksByDueDate(assignedTasks.map(task => ({
                 ...task,
                 status: task.completed ? "completed" : task.status || "requested"
-            }));
-        }
-
-        function displayDueDate(task) {
-            if (task.date) {
-                const date = new Date(`${task.date}T00:00:00`);
-                const dateText = date.toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric"
-                });
-                const timeText = task.time
-                    ? ` at ${new Date(`2000-01-01T${task.time}`).toLocaleTimeString("en-US", {
-                        hour: "numeric",
-                        minute: "2-digit"
-                    })}`
-                    : "";
-                return `Due ${dateText}${timeText}`;
-            }
-            return task.dueDate
-                ? `Due ${task.dueDate}${task.dueTime ? ` at ${task.dueTime}` : ""}`
-                : "No due date";
+            })));
         }
 
         function isAssignedToCurrentUser(task) {
@@ -1584,12 +1712,32 @@ document.addEventListener("DOMContentLoaded", async function () {
                     .filter(Boolean);
         }
 
+        function makeTaskCardOpenable(card, task) {
+            card.tabIndex = 0;
+            card.setAttribute("role", "button");
+            card.setAttribute("aria-label", `View task details: ${task.title}`);
+            card.addEventListener("click", event => {
+                if (event.target instanceof Element && event.target.closest("button, input, select, textarea, a, form")) {
+                    return;
+                }
+                openTask(task.id);
+            });
+            card.addEventListener("keydown", event => {
+                if (event.target !== card || !["Enter", " "].includes(event.key)) {
+                    return;
+                }
+                event.preventDefault();
+                openTask(task.id);
+            });
+        }
+
         async function updateTask(task, update, showFeedback = false) {
             try {
                 await window.roomieCloud.updateTask(task.id, update);
                 loadError = "";
                 if (showFeedback) {
                     feedback = { task: { ...task, ...update }, status: update.status };
+                    openTaskId = null;
                 }
                 renderTasks();
             } catch (error) {
@@ -1601,7 +1749,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         function createTaskSummary(task, options = {}) {
             const card = document.createElement("article");
-            card.className = "task-list-card";
+            card.className = "task-list-card roomie-card roomie-task-card roomie-person-card";
             if (task.status === "completed") {
                 card.classList.add("completed");
             }
@@ -1613,17 +1761,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             const assignees = taskAssignees(task);
 
             // The card takes the color of the person the task is for, not the person who assigned it
-            if (assignees[0]?.secondary) {
-                card.style.backgroundColor = assignees[0].secondary;
-            }
+            setMemberCardColor(card, assignees[0], "#ffffff");
  
             function buildAvatar(member, fallbackName) {
-                const circle = document.createElement("span");
-                circle.className = "task-list-avatar";
+                const circle = createMemberAvatar(
+                    member,
+                    "task-list-avatar",
+                    fallbackName?.charAt(0).toUpperCase() || "?",
+                    "span",
+                    "#e5f1ee"
+                );
                 circle.style.color = "#080808";
-                if (member?.color) {
-                    circle.style.backgroundColor = member.color;
-                }
                 if (member?.photo) {
                     const image = document.createElement("img");
                     image.src = member.photo;
@@ -1631,8 +1779,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                     image.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;";
                     circle.style.overflow = "hidden";
                     circle.append(image);
-                } else {
-                    circle.textContent = member?.initials || fallbackName?.charAt(0).toUpperCase() || "?";
                 }
                 circle.title = member?.name || fallbackName || "";
                 return circle;
@@ -1666,10 +1812,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             details.className = "task-list-details";
             const title = document.createElement("strong");
             title.textContent = task.title;
-            const meta = document.createElement("span");
-            const due = displayDueDate(task).replace(/^Due /, "");
-            meta.textContent = `${assignedByName(task)} · ${due}`;
-            details.append(title, meta);
+            const due = formatTaskDue(task).replace(/^Due /, "");
+            const dueText = document.createElement("span");
+            dueText.className = "roomie-due-date";
+            dueText.textContent = due;
+            details.append(title, dueText);
+            details.append(createAttribution(assignedByName(task), "span"));
  
             if (options.allowCompletion && ["accepted", "completed"].includes(task.status)) {
                 const checkbox = document.createElement("input");
@@ -1694,27 +1842,27 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
  
             card.prepend(avatar, details);
+            if (options.openable !== false) {
+                makeTaskCardOpenable(card, task);
+            }
             return card;
         }
 
         function renderRequest(task) {
             const card = document.createElement("article");
-            card.className = "task-request-card";
+            card.className = "task-request-card roomie-card roomie-task-card roomie-person-card";
             const assignees = taskAssignees(task);
             const assignee = assignees.find(member => member.id === meId) || assignees[0];
-            if (assignee?.secondary) {
-                card.style.backgroundColor = assignee.secondary;
-            }
+            setMemberCardColor(card, assignee, "#ffffff");
 
             const title = document.createElement("h3");
             title.className = "task-request-title";
             title.textContent = task.title;
-            const assignedBy = document.createElement("p");
-            assignedBy.className = "task-assigned-by";
-            assignedBy.textContent = `Assigned by ${assignedByName(task)}`;
+            const assignedBy = createAttribution(assignedByName(task));
+            assignedBy.classList.add("task-assigned-by");
             const due = document.createElement("p");
-            due.className = "task-due";
-            due.textContent = displayDueDate(task);
+            due.className = "task-due roomie-due-date";
+            due.textContent = formatTaskDue(task);
 
             const actions = document.createElement("div");
             actions.className = "task-request-actions";
@@ -1767,7 +1915,74 @@ document.addEventListener("DOMContentLoaded", async function () {
             });
 
             card.append(title, assignedBy, due, actions, rescheduleButton);
+            makeTaskCardOpenable(card, task);
             return card;
+        }
+
+        function openTask(id) {
+            openTaskId = id;
+            feedback = null;
+            document.body.classList.remove("show-task-feedback");
+            renderTaskDetail();
+            window.scrollTo(0, 0);
+        }
+
+        function closeTaskDetail() {
+            openTaskId = null;
+            taskDetailView.hidden = true;
+            taskListView.hidden = false;
+            renderTasks();
+        }
+
+        function renderTaskDetail() {
+            const task = allTasks().find(item => item.id === openTaskId);
+            if (!task) {
+                closeTaskDetail();
+                return;
+            }
+
+            const assignees = taskAssignees(task);
+            setMemberCardColor(taskDetailHero, assignees[0], "#ffffff");
+            taskDetailHero.replaceChildren();
+
+            const top = document.createElement("div");
+            top.className = "cal-hero-top";
+            const label = document.createElement("p");
+            label.className = "cal-form-label";
+            label.textContent = "Task";
+            top.append(label);
+
+            const body = document.createElement("div");
+            body.className = "cal-hero-body";
+            const title = document.createElement("h2");
+            title.className = "cal-hero-title";
+            title.textContent = task.title;
+
+            const normalizedStatus = String(task.status || "requested").toLowerCase();
+            body.append(title, createDetailHeroDate("Due", formatTaskDueDate(task)));
+            taskDetailHero.append(top, body);
+
+            const assignedTo = assignees.length
+                ? assignees.map(member => member.name).join(", ")
+                : (Array.isArray(task.assignedTo) ? task.assignedTo.join(", ") : task.assignedTo) || "Household";
+            const rows = [
+                ["fa-calendar-day", "Due", formatTaskDueDate(task)]
+            ];
+            const dueTime = formatTaskDueTime(task);
+            if (dueTime) {
+                rows.push(["fa-clock", "Time", dueTime]);
+            }
+            rows.push(
+                ["fa-circle-check", "Status", normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)],
+                ["fa-user-group", "Assigned to", assignedTo],
+                ["fa-user", "Added by", assignedByName(task)],
+                ["fa-align-left", "Details", task.details || task.description || "No details"]
+            );
+            renderDetailRows(taskDetailCard, rows);
+
+            taskListView.hidden = true;
+            taskDetailView.hidden = false;
+            feedbackView.hidden = true;
         }
 
         function renderFeedback() {
@@ -1785,7 +2000,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             feedbackTaskCard.replaceChildren(createTaskSummary({
                 ...feedback.task,
                 status: accepted ? "accepted" : "rejected"
-            }, { showStatus: true }));
+            }, { showStatus: true, openable: false }));
         }
 
         function renderTasks() {
@@ -1825,8 +2040,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             if (feedback) {
                 renderFeedback();
+            } else if (openTaskId) {
+                renderTaskDetail();
             } else {
                 feedbackView.hidden = true;
+                taskDetailView.hidden = true;
                 taskListView.hidden = false;
             }
         }
@@ -1858,6 +2076,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const selected = [...taskAssigneeOptions.querySelectorAll('input:checked')].map(input => input.value);
             renderAssigneeOptions(selected.length ? selected : [memberId(familyMembers[0], 0)]);
+            if (requestedTaskId && assignedTasks.some(task => task.id === requestedTaskId)) {
+                openTaskId = requestedTaskId;
+                requestedTaskId = null;
+            }
             renderTasks();
         }
 
@@ -1866,6 +2088,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             document.body.classList.remove("show-task-feedback");
             renderTasks();
         });
+        document.getElementById("backFromTaskDetails").addEventListener("click", closeTaskDetail);
 
         addTaskForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -2038,16 +2261,15 @@ document.addEventListener("DOMContentLoaded", async function () {
             familyList.replaceChildren();
             familyMembers.forEach(member => {
                 const card = document.createElement("div");
-                card.className = "task-card";
-                if (member.secondary) {
-                    card.style.backgroundColor = member.secondary;
-                }
-                const avatar = document.createElement("div");
-                avatar.className = "task-avatar";
-                avatar.textContent = member.initials || member.name.charAt(0).toUpperCase();
-                if (member.color) {
-                    avatar.style.backgroundColor = member.color;
-                }
+                card.className = "task-card roomie-card roomie-person-card";
+                setMemberCardColor(card, member, "#ffffff");
+                const avatar = createMemberAvatar(
+                    member,
+                    "task-avatar",
+                    member.name.charAt(0).toUpperCase(),
+                    "div",
+                    "#e7d9f5"
+                );
                 const info = document.createElement("div");
                 info.className = "task-info";
                 const name = document.createElement("h4");
