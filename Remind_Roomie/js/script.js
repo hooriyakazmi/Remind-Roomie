@@ -1379,15 +1379,49 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (task.status === "completed") {
                 card.classList.add("completed");
             }
-
-            const avatar = document.createElement("span");
-            avatar.className = "task-list-avatar";
+ 
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
-                : String(task.assignedTo || "Household").split(",").map(name => name.trim());
-            const member = familyMembers.find(person => assignedNames.includes(person.name));
-            avatar.textContent = member?.initials || assignedNames[0]?.charAt(0).toUpperCase() || "?";
-
+                : String(task.assignedTo || "Household").split(",").map(name => name.trim()).filter(Boolean);
+            const assignees = [...new Set(assignedNames)]
+                .map(name => familyMembers.find(person => person.name === name))
+                .filter(Boolean);
+ 
+            function buildAvatar(member, fallbackName) {
+                const circle = document.createElement("span");
+                circle.className = "task-list-avatar";
+                if (member?.color) {
+                    circle.style.backgroundColor = member.color;
+                }
+                if (member?.photo) {
+                    const image = document.createElement("img");
+                    image.src = member.photo;
+                    image.alt = member.name;
+                    image.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;";
+                    circle.style.overflow = "hidden";
+                    circle.append(image);
+                } else {
+                    circle.textContent = member?.initials || fallbackName?.charAt(0).toUpperCase() || "?";
+                }
+                circle.title = member?.name || fallbackName || "";
+                return circle;
+            }
+ 
+            const avatar = document.createElement("span");
+            avatar.className = "task-list-avatars";
+            avatar.style.cssText = "display:flex;flex:0 0 auto;align-items:center;";
+            avatar.setAttribute("aria-label", `Assigned to ${assignedNames.join(", ")}`);
+            const avatarList = assignees.length
+                ? assignees.map(member => buildAvatar(member))
+                : [buildAvatar(null, assignedNames[0])];
+            avatarList.forEach((circle, index) => {
+                if (index > 0) {
+                    circle.style.marginLeft = "-8px";
+                }
+                circle.style.boxShadow = "0 0 0 2px #fff";
+                avatar.append(circle);
+            });
+ 
             const details = document.createElement("span");
             details.className = "task-list-details";
             const title = document.createElement("strong");
@@ -1396,7 +1430,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const due = displayDueDate(task).replace(/^Due /, "");
             meta.textContent = `${task.assignedBy || "Household"} · ${due}`;
             details.append(title, meta);
-
+ 
             if (options.allowCompletion && ["accepted", "completed"].includes(task.status)) {
                 const checkbox = document.createElement("input");
                 checkbox.className = "task-completion-toggle";
@@ -1418,7 +1452,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 status.textContent = task.status.charAt(0).toUpperCase() + task.status.slice(1);
                 card.append(status);
             }
-
+ 
             card.prepend(avatar, details);
             return card;
         }
