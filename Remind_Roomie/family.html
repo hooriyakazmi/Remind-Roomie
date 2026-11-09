@@ -29,49 +29,32 @@
                     aria-controls="memberForm"
                 >
                     <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                    Add member
+                    Invite member
                 </button>
             </div>
 
             <form class="member-form" id="memberForm" hidden>
-                <h3>Add a household member</h3>
+                <h3>Invite a roommate</h3>
 
-                <label for="memberName">Name</label>
+                <label for="memberEmail">Email address</label>
                 <input
-                    id="memberName"
-                    name="name"
-                    type="text"
-                    maxlength="60"
-                    placeholder="Enter their name"
-                    autocomplete="name"
+                    id="memberEmail"
+                    name="email"
+                    type="email"
+                    placeholder="roommate@example.com"
+                    autocomplete="email"
                     required
                 >
 
-                <label for="memberRole">Relationship <span>(optional)</span></label>
-                <input
-                    id="memberRole"
-                    name="role"
-                    type="text"
-                    maxlength="60"
-                    placeholder="e.g. Parent, roommate"
-                >
-
-                <label for="memberPhoto">Profile picture <span>(optional)</span></label>
-                <input
-                    id="memberPhoto"
-                    name="photo"
-                    type="file"
-                    accept="image/*"
-                >
-                <p class="form-help">Choose an image up to 2 MB.</p>
-
-                <p class="family-message" id="familyMessage" role="alert" hidden></p>
+                <p class="form-help">The invitation is restricted to this email address. Share the household ID and one-time code with your roommate.</p>
 
                 <div class="member-form-actions">
                     <button class="secondary-button" id="cancelAddMember" type="button">Cancel</button>
-                    <button class="primary-button" type="submit">Add member</button>
+                    <button class="primary-button" type="submit">Create invitation</button>
                 </div>
             </form>
+
+            <p class="family-message" id="familyMessage" role="alert" hidden></p>
 
             <div id="familyList">
                 <!-- Family members are added using JavaScript -->
@@ -79,6 +62,11 @@
         </section>
 
     </main>
+
+    <div class="account-bar">
+        <span>Signed in as <strong id="accountName"></strong></span>
+        <button id="signOutButton" type="button">Sign out</button>
+    </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
@@ -105,8 +93,9 @@
 
     </nav>
 
-    <script src="js/data.js"></script>
-    <script src="js/script.js"></script>
+    <script src="js/form-controls.js?v=20261108-controls-2"></script>
+    <script src="js/data.js?v=20261108-controls-2"></script>
+    <script src="js/script.js?v=20261108-controls-2"></script>
 
 </body>
 </html>

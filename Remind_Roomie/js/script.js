@@ -1,5 +1,32 @@
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
+    window.roomieAppState = "loading";
+
+    // Start cloud loading after the local controls are ready. Dynamic import also
+    // lets us report SDK-loading failures instead of leaving the page inactive.
+    try {
+        if (window.roomieHouseholdReady) {
+            await window.roomieHouseholdReady;
+        } else {
+            await import("./firebase-app.js");
+            await window.roomieHouseholdReady;
+        }
+    } catch (error) {
+        console.error("Could not initialize Firebase.", error);
+        let status = document.getElementById("appStatus");
+        if (!status) {
+            status = document.createElement("p");
+            status.id = "appStatus";
+            status.className = "app-status";
+            status.setAttribute("role", "alert");
+            document.body.prepend(status);
+        }
+        status.textContent = "Could not load Firebase. Serve this app over HTTP, check your connection, and reload to retry.";
+    }
+    window.roomieAppState = window.roomieCloud ? "ready" : "unavailable";
+    if (!window.roomieCloud) return;
+
+    const storageKey = key => `${key}:${window.roomieCloud.user.uid}`;
 
     // Make sure the shared data file is loaded
     if (typeof householdData === "undefined") {
@@ -39,25 +66,6 @@ document.addEventListener("DOMContentLoaded", function () {
             });
 
 
-        // Display task progress
-        const completed = householdData.progress.completed;
-        const total = householdData.progress.total;
-
-        const percentage = total > 0
-            ? Math.round((completed / total) * 100)
-            : 0;
-
-        document.getElementById("taskProgress").textContent =
-            `${completed} of ${total} tasks completed`;
-
-        document.getElementById("progressPercentage").textContent =
-            `${percentage}%`;
-
-        // Update progress ring
-        document.getElementById("progressRing").style.background =
-            `conic-gradient(#357266 ${percentage}%, #ffffff ${percentage}%)`;
-
-
         const userName = householdData.user.name;
         const currentUser = householdData.family.find(member => member.name === userName);
         const memberForName = name => householdData.family.find(member => member.name === name);
@@ -65,142 +73,109 @@ document.addEventListener("DOMContentLoaded", function () {
         today.setHours(0, 0, 0, 0);
         const weekEnd = new Date(today);
         weekEnd.setDate(weekEnd.getDate() + 7);
-        const personalEvents = [
-            ...householdData.calendar.personal.map(event => ({
-                ...event,
-                owner: userName
-            }))
-        ];
+        function renderHomeEvents() {
+            homeEvents.replaceChildren();
+            const personalEvents = [
+                ...householdData.calendar.personal.map(event => ({
+                    ...event,
+                    owner: userName
+                }))
+            ];
 
-        try {
-            const savedEvents = JSON.parse(localStorage.getItem("remindRoomieCalendarEvents") || "[]");
-            if (!Array.isArray(savedEvents)) {
-                throw new Error("Saved events have an invalid format.");
+            try {
+                const savedEvents = JSON.parse(localStorage.getItem(storageKey("remindRoomieCalendarEvents")) || "[]");
+                if (!Array.isArray(savedEvents)) {
+                    throw new Error("Saved events have an invalid format.");
+                }
+                personalEvents.push(...savedEvents
+                    .filter(event => event.scope !== "shared")
+                    .map(event => ({ ...event, owner: userName })));
+            } catch (error) {
+                console.error("Could not load calendar events for the home page.", error);
             }
-            personalEvents.push(...savedEvents
-                .filter(event => event.scope !== "shared")
-                .map(event => ({ ...event, owner: userName })));
-        } catch (error) {
-            console.error("Could not load calendar events for the home page.", error);
-        }
 
-        let eventEdits = {};
-        let deletedEventIds = [];
-        try {
-            const savedEdits = localStorage.getItem("remindRoomieCalendarEdits");
-            eventEdits = savedEdits ? JSON.parse(savedEdits) : {};
-            if (!eventEdits || Array.isArray(eventEdits) || typeof eventEdits !== "object") {
-                throw new Error("Saved event changes have an invalid format.");
+            let eventEdits = {};
+            let deletedEventIds = [];
+            try {
+                const savedEdits = localStorage.getItem(storageKey("remindRoomieCalendarEdits"));
+                eventEdits = savedEdits ? JSON.parse(savedEdits) : {};
+                if (!eventEdits || Array.isArray(eventEdits) || typeof eventEdits !== "object") {
+                    throw new Error("Saved event changes have an invalid format.");
+                }
+            } catch (error) {
+                console.error("Could not load event changes for the home page.", error);
             }
-        } catch (error) {
-            console.error("Could not load event changes for the home page.", error);
-        }
-        try {
-            const savedDeletedEvents = localStorage.getItem("remindRoomieDeletedEvents");
-            deletedEventIds = savedDeletedEvents ? JSON.parse(savedDeletedEvents) : [];
-            if (!Array.isArray(deletedEventIds)) {
-                throw new Error("Deleted events have an invalid format.");
+            try {
+                const savedDeletedEvents = localStorage.getItem(storageKey("remindRoomieDeletedEvents"));
+                deletedEventIds = savedDeletedEvents ? JSON.parse(savedDeletedEvents) : [];
+                if (!Array.isArray(deletedEventIds)) {
+                    throw new Error("Deleted events have an invalid format.");
+                }
+            } catch (error) {
+                console.error("Could not load deleted events for the home page.", error);
             }
-        } catch (error) {
-            console.error("Could not load deleted events for the home page.", error);
-        }
 
-        const eventsThisWeek = personalEvents
-            .filter(event => !deletedEventIds.includes(event.id))
-            .map(event => ({ ...event, ...(eventEdits[event.id] || {}) }))
-            .filter(event => {
-                const eventDate = new Date(`${event.date}T00:00:00`);
-                return event.owner === userName && event.date &&
-                    !Number.isNaN(eventDate.getTime()) &&
-                    eventDate >= today && eventDate < weekEnd;
-            })
-            .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""));
+            const eventsThisWeek = personalEvents
+                .filter(event => !deletedEventIds.includes(event.id))
+                .map(event => ({ ...event, ...(eventEdits[event.id] || {}) }))
+                .filter(event => {
+                    const eventDate = new Date(`${event.date}T00:00:00`);
+                    return event.owner === userName && event.date &&
+                        !Number.isNaN(eventDate.getTime()) &&
+                        eventDate >= today && eventDate < weekEnd;
+                })
+                .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""));
 
-        if (eventsThisWeek.length) {
-            eventsThisWeek.forEach(event => {
-                const card = document.createElement("article");
-                card.className = "event-card";
-                const owner = memberForName(event.owner);
-                card.style.backgroundColor = owner?.secondary || "#fbe0fb";
-                const avatar = document.createElement("div");
-                avatar.className = "event-avatar";
-                avatar.style.backgroundColor = owner?.color || "#f7dafa";
-                avatar.textContent = owner?.initials || userName.charAt(0).toUpperCase();
-                const details = document.createElement("div");
-                details.className = "event-details";
-                const title = document.createElement("h4");
-                title.textContent = event.title;
-                const date = document.createElement("p");
-                const eventDate = new Date(`${event.date}T00:00:00`);
-                const dateText = eventDate.toLocaleDateString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric"
+            if (eventsThisWeek.length) {
+                eventsThisWeek.forEach(event => {
+                    const card = document.createElement("article");
+                    card.className = "event-card";
+                    const owner = memberForName(event.owner);
+                    card.style.backgroundColor = owner?.secondary || "#fbe0fb";
+                    const avatar = document.createElement("div");
+                    avatar.className = "event-avatar";
+                    avatar.style.backgroundColor = owner?.color || "#f7dafa";
+                    avatar.textContent = owner?.initials || userName.charAt(0).toUpperCase();
+                    const details = document.createElement("div");
+                    details.className = "event-details";
+                    const title = document.createElement("h4");
+                    title.textContent = event.title;
+                    const date = document.createElement("p");
+                    const eventDate = new Date(`${event.date}T00:00:00`);
+                    const dateText = eventDate.toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric"
+                    });
+                    const timeText = event.time
+                        ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit"
+                        })
+                        : "All day";
+                    date.textContent = `${dateText} · ${timeText}`;
+                    details.append(title, date);
+                    card.append(avatar, details);
+                    homeEvents.append(card);
                 });
-                const timeText = event.time
-                    ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", {
-                        hour: "numeric",
-                        minute: "2-digit"
-                    })
-                    : "All day";
-                date.textContent = `${dateText} · ${timeText}`;
-                details.append(title, date);
-                card.append(avatar, details);
-                homeEvents.append(card);
-            });
-        } else {
-            const empty = document.createElement("p");
-            empty.className = "home-list-empty";
-            empty.textContent = "No personal events this week.";
-            homeEvents.append(empty);
-        }
+            } else {
+                const empty = document.createElement("p");
+                empty.className = "home-list-empty";
+                empty.textContent = "No personal events this week.";
+                homeEvents.append(empty);
+            }
+
+            }
+        renderHomeEvents();
+        window.addEventListener("roomie:local-events-updated", renderHomeEvents);
 
         const assignedToCurrentUser = task => {
+            if (task.memberIds?.length) return task.memberIds.includes(window.roomieCloud.user.uid);
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
             return assignedNames.includes(userName) || assignedNames.includes("Household");
         };
-        let homeTaskList = [...householdData.tasks];
-        let taskDecisions = {};
-
-        try {
-            const savedTasks = localStorage.getItem("remindRoomieTasks") ||
-                localStorage.getItem("remindRoomieChores");
-            if (savedTasks) {
-                const parsedTasks = JSON.parse(savedTasks);
-                if (!Array.isArray(parsedTasks) || parsedTasks.some(task => !task || typeof task.title !== "string")) {
-                    throw new Error("Saved tasks have an invalid format.");
-                }
-                homeTaskList.push(...parsedTasks.map(task => ({
-                    ...task,
-                    assignedTo: task.assignedTo || householdData.family
-                        .filter((member, index) => task.memberIds?.includes(member.id || `member-${index}`))
-                        .map(member => member.name)
-                        .join(", ") || "Household"
-                })));
-            }
-        } catch (error) {
-            console.error("Could not load tasks for the home page.", error);
-        }
-        try {
-            const savedDecisions = localStorage.getItem("remindRoomieTaskDecisions");
-            taskDecisions = savedDecisions ? JSON.parse(savedDecisions) : {};
-            if (!taskDecisions || Array.isArray(taskDecisions) || typeof taskDecisions !== "object") {
-                throw new Error("Saved task updates have an invalid format.");
-            }
-        } catch (error) {
-            console.error("Could not load task updates for the home page.", error);
-        }
-
-        const myTasks = homeTaskList
-            .map((task, index) => {
-                const id = task.id || `sample-task-${index}`;
-                return { ...task, ...taskDecisions[id], id };
-            })
-            .filter(task => assignedToCurrentUser(task) &&
-                String(task.status || "requested").toLowerCase() !== "completed");
-
         const formatTaskDue = task => {
             if (task.date) {
                 const dueDate = new Date(`${task.date}T00:00:00`);
@@ -221,7 +196,20 @@ document.addEventListener("DOMContentLoaded", function () {
                 : "No due date";
         };
 
-        if (myTasks.length) {
+        function renderHomeTasks() {
+            homeTasks.replaceChildren();
+            const tasks = window.roomieCloud.tasks;
+            const completed = tasks.filter(task => task.status === "completed").length;
+            const total = tasks.length;
+            const percentage = total ? Math.round(completed / total * 100) : 0;
+            document.getElementById("taskProgress").textContent = `${completed} of ${total} tasks completed`;
+            document.getElementById("progressPercentage").textContent = `${percentage}%`;
+            document.getElementById("progressRing").style.background =
+                `conic-gradient(#357266 ${percentage}%, #ffffff ${percentage}%)`;
+            const myTasks = window.roomieCloud.tasks
+                .filter(task => assignedToCurrentUser(task) && ["requested", "accepted"].includes(task.status));
+
+            if (myTasks.length) {
             myTasks.forEach(task => {
                 const card = document.createElement("article");
                 card.className = "event-card";
@@ -248,12 +236,20 @@ document.addEventListener("DOMContentLoaded", function () {
                 card.append(avatar, details);
                 homeTasks.append(card);
             });
-        } else {
-            const empty = document.createElement("p");
-            empty.className = "home-list-empty";
-            empty.textContent = "No tasks assigned to you.";
-            homeTasks.append(empty);
+            } else {
+                const empty = document.createElement("p");
+                empty.className = "home-list-empty";
+                empty.textContent = "No tasks assigned to you.";
+                homeTasks.append(empty);
+            }
         }
+
+        renderHomeTasks();
+        window.addEventListener("roomie:tasks-updated", renderHomeTasks);
+        window.addEventListener("roomie:members-updated", () => {
+            householdData.family = window.roomieCloud.members;
+            renderHomeTasks();
+        });
 
     }
 
@@ -266,9 +262,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (calendarGrid) {
 
-        const calendarStorageKey = "remindRoomieCalendarEvents";
-        const editsStorageKey = "remindRoomieCalendarEdits";
-        const deletedStorageKey = "remindRoomieDeletedEvents";
+        const calendarStorageKey = storageKey("remindRoomieCalendarEvents");
+        const editsStorageKey = storageKey("remindRoomieCalendarEdits");
+        const deletedStorageKey = storageKey("remindRoomieDeletedEvents");
         const deleteModal = document.getElementById("deleteModal");
         const deleteModalText = document.getElementById("deleteModalText");
         const calendarView = document.getElementById("calendarView");
@@ -717,7 +713,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            const isOwner = event.owner === householdData.user.name;
+            const isOwner = event._remote
+                ? event.createdBy === window.roomieCloud.user.uid
+                : event.owner === householdData.user.name;
             const owner = ownerOf(event);
 
             // Hero card, tinted with the owner's secondary color
@@ -852,7 +850,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
         document.getElementById("cancelDelete").addEventListener("click", closeDeleteModal);
 
-        document.getElementById("confirmDelete").addEventListener("click", () => {
+        document.getElementById("confirmDelete").addEventListener("click", async () => {
+            const remoteEvent = householdData.calendar.shared.find(event => event.id === pendingDeleteId);
+            if (remoteEvent) {
+                try {
+                    await window.roomieCloud.deleteEvent(remoteEvent.id);
+                    closeDeleteModal();
+                    showCalendarView();
+                } catch (error) {
+                    console.error("Could not delete the shared event.", error);
+                    showCalendarView();
+                    window.roomieCloud.reportError(error);
+                }
+                return;
+            }
+
             const nextDeleted = [...deletedEventIds, pendingDeleteId];
             try {
                 localStorage.setItem(deletedStorageKey, JSON.stringify(nextDeleted));
@@ -887,7 +899,7 @@ document.addEventListener("DOMContentLoaded", function () {
             renderDetail();
         });
 
-        editEventForm.addEventListener("submit", event => {
+        editEventForm.addEventListener("submit", async event => {
             event.preventDefault();
             editMessage.hidden = true;
 
@@ -912,16 +924,30 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
+            const changes = {
+                title,
+                date: editDate.value,
+                time: editTime.value,
+                endTime: editEndTime.value,
+                location: editLocation.value.trim(),
+                description: editDescription.value.trim()
+            };
+            const remoteEvent = householdData.calendar.shared.find(item => item.id === openEventId);
+            if (remoteEvent) {
+                try {
+                    await window.roomieCloud.updateEvent(openEventId, changes);
+                    editingEvent = false;
+                    renderDetail();
+                } catch (error) {
+                    console.error("Could not save the shared event change.", error);
+                    showEditMessage("Could not save this shared event. Please try again.");
+                }
+                return;
+            }
+
             const nextEdits = {
                 ...eventEdits,
-                [openEventId]: {
-                    title,
-                    date: editDate.value,
-                    time: editTime.value,
-                    endTime: editEndTime.value,
-                    location: editLocation.value.trim(),
-                    description: editDescription.value.trim()
-                }
+                [openEventId]: changes
             };
 
             try {
@@ -958,7 +984,7 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("backFromAddEvent").addEventListener("click", closeEventForm);
         document.getElementById("cancelAddEvent").addEventListener("click", closeEventForm);
 
-        addEventForm.addEventListener("submit", event => {
+        addEventForm.addEventListener("submit", async event => {
             event.preventDefault();
             eventMessage.hidden = true;
 
@@ -1004,24 +1030,67 @@ document.addEventListener("DOMContentLoaded", function () {
                     ? "personal"
                     : "shared"
             };
-            const nextEvents = [...savedEvents, newEvent];
-
-            try {
-                localStorage.setItem(calendarStorageKey, JSON.stringify(nextEvents));
-            } catch (error) {
-                console.error("Could not save the new event.", error);
-                showEventMessage("Could not save this event in your browser storage.");
-                return;
+            if (newEvent.scope === "shared") {
+                try {
+                    newEvent.id = await window.roomieCloud.addEvent(newEvent);
+                    newEvent._remote = true;
+                    // onSnapshot supplies the event; inserting here would duplicate it.
+                } catch (error) {
+                    console.error("Could not save the shared event.", error);
+                    showEventMessage("Could not save this shared event. Please try again.");
+                    return;
+                }
+            } else {
+                const nextEvents = [...savedEvents, newEvent];
+                try {
+                    localStorage.setItem(calendarStorageKey, JSON.stringify(nextEvents));
+                } catch (error) {
+                    console.error("Could not save the new event.", error);
+                    showEventMessage("Could not save this event in your browser storage.");
+                    return;
+                }
+                savedEvents = nextEvents;
             }
 
             // Jump to the new event so it is visible straight away
             const eventDay = new Date(`${newEvent.date}T00:00:00`);
-            savedEvents = nextEvents;
             viewYear = eventDay.getFullYear();
             viewMonth = eventDay.getMonth();
             selectedDate = newEvent.date;
             closeEventForm();
             setScope(newEvent.scope);
+        });
+
+        window.addEventListener("roomie:events-updated", () => {
+            householdData.calendar.shared = window.roomieCloud.events.map(event => ({
+                ...event,
+                kind: "family",
+                owner: event.addedBy
+            }));
+            render();
+            if (openEventId && !editingEvent) {
+                renderDetail();
+            }
+        });
+
+        window.addEventListener("roomie:local-events-updated", () => {
+            loadSavedEvents();
+            loadEventEdits();
+            loadDeletedEvents();
+            render();
+        });
+        window.addEventListener("storage", event => {
+            if ([calendarStorageKey, editsStorageKey, deletedStorageKey].includes(event.key) || event.key === null) {
+                loadSavedEvents();
+                loadEventEdits();
+                loadDeletedEvents();
+                render();
+            }
+        });
+        window.addEventListener("roomie:members-updated", () => {
+            householdData.family = window.roomieCloud.members;
+            renderEventAssignees();
+            render();
         });
 
         // --------------------------------
@@ -1229,9 +1298,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const taskRequests = document.getElementById("taskRequests");
 
     if (taskRequests) {
-        const tasksStorageKey = "remindRoomieTasks";
-        const decisionsStorageKey = "remindRoomieTaskDecisions";
-        const familyStorageKey = "remindRoomieFamily";
         const taskListView = document.getElementById("taskListView");
         const yourTasksList = document.getElementById("yourTasks");
         const allTasksList = document.getElementById("allTasks");
@@ -1250,7 +1316,6 @@ document.addEventListener("DOMContentLoaded", function () {
         const newTaskMessage = document.getElementById("newTaskMessage");
         let familyMembers = [...householdData.family];
         let assignedTasks = [];
-        let decisions = {};
         let feedback = null;
         let loadError = "";
 
@@ -1258,31 +1323,11 @@ document.addEventListener("DOMContentLoaded", function () {
             return member.id || `member-${index}`;
         }
 
-        function getTaskStatus(task) {
-            const legacyStatus = String(task.status || "requested").toLowerCase();
-            if (decisions[task.id]?.status) {
-                return decisions[task.id].status;
-            }
-            if (legacyStatus === "completed") {
-                return "completed";
-            }
-            return legacyStatus === "accepted" || legacyStatus === "rejected"
-                ? legacyStatus
-                : "requested";
-        }
-
         function allTasks() {
-            return [...householdData.tasks, ...assignedTasks].map((task, index) => {
-                const id = task.id || `sample-task-${index}`;
-                const normalizedTask = { ...task, id };
-                const decision = decisions[id] || {};
-                return {
-                    ...normalizedTask,
-                    ...decision,
-                    id,
-                    status: getTaskStatus(normalizedTask)
-                };
-            });
+            return assignedTasks.map(task => ({
+                ...task,
+                status: task.completed ? "completed" : task.status || "requested"
+            }));
         }
 
         function displayDueDate(task) {
@@ -1306,40 +1351,26 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         function isAssignedToCurrentUser(task) {
+            if (task.memberIds?.length) return task.memberIds.includes(window.roomieCloud.user.uid);
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
             return assignedNames.includes(householdData.user.name) || assignedNames.includes("Household");
         }
 
-        function saveDecisions(nextDecisions) {
+        async function updateTask(task, update, showFeedback = false) {
             try {
-                localStorage.setItem(decisionsStorageKey, JSON.stringify(nextDecisions));
-                decisions = nextDecisions;
-                return true;
-            } catch (error) {
-                console.error("Could not save task updates.", error);
-                return false;
-            }
-        }
-
-        function updateTask(task, update, showFeedback = false) {
-            const nextDecisions = {
-                ...decisions,
-                [task.id]: {
-                    ...decisions[task.id],
-                    ...update
+                await window.roomieCloud.updateTask(task.id, update);
+                loadError = "";
+                if (showFeedback) {
+                    feedback = { task: { ...task, ...update }, status: update.status };
                 }
-            };
-
-            if (!saveDecisions(nextDecisions)) {
-                return;
+                renderTasks();
+            } catch (error) {
+                console.error("Could not save the household task update.", error);
+                loadError = "Could not save this task update. Please try again.";
+                renderTasks();
             }
-
-            if (showFeedback) {
-                feedback = { task: { ...task, ...update }, status: update.status };
-            }
-            renderTasks();
         }
 
         function createTaskSummary(task, options = {}) {
@@ -1530,7 +1561,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 checkbox.type = "checkbox";
                 checkbox.name = "assignees";
                 checkbox.value = memberId(member, index);
-                checkbox.checked = selectedIds.includes(checkbox.value);
+                checkbox.defaultChecked = selectedIds.includes(checkbox.value);
+                checkbox.checked = checkbox.defaultChecked;
                 const name = document.createElement("span");
                 name.textContent = member.name;
                 label.append(checkbox, name);
@@ -1540,63 +1572,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function loadTasks() {
             loadError = "";
-            try {
-                const savedFamily = localStorage.getItem(familyStorageKey);
-                familyMembers = [...householdData.family];
-                if (savedFamily) {
-                    const parsedFamily = JSON.parse(savedFamily);
-                    if (!Array.isArray(parsedFamily) || parsedFamily.some(member =>
-                        !member || typeof member.name !== "string"
-                    )) {
-                        throw new Error("Saved family members have an invalid format.");
-                    }
-                    familyMembers.push(...parsedFamily);
-                }
-            } catch (error) {
-                console.error("Could not load family members for tasks.", error);
-                loadError = "Family members could not be loaded.";
-            }
+            familyMembers = window.roomieCloud.members.length
+                ? [...window.roomieCloud.members]
+                : [...householdData.family];
+            assignedTasks = [...window.roomieCloud.tasks];
 
-            try {
-                const savedTasks = localStorage.getItem(tasksStorageKey) ||
-                    localStorage.getItem("remindRoomieChores");
-                if (savedTasks) {
-                    const parsedTasks = JSON.parse(savedTasks);
-                    if (!Array.isArray(parsedTasks) || parsedTasks.some(task =>
-                        !task || typeof task.id !== "string" ||
-                        typeof task.title !== "string" ||
-                        typeof task.date !== "string" ||
-                        typeof task.time !== "string"
-                    )) {
-                        throw new Error("Saved tasks have an invalid format.");
-                    }
-                    assignedTasks = parsedTasks.map(task => ({
-                        ...task,
-                        assignedBy: task.assignedBy || householdData.user.name,
-                        assignedTo: task.assignedTo || familyMembers
-                            .filter((member, index) => task.memberIds?.includes(member.id || `member-${index}`))
-                            .map(member => member.name)
-                            .join(", ") || "Household"
-                    }));
-                }
-            } catch (error) {
-                console.error("Could not load assigned tasks.", error);
-                loadError = "Assigned tasks could not be loaded.";
-            }
-
-            try {
-                const savedDecisions = localStorage.getItem(decisionsStorageKey);
-                decisions = savedDecisions ? JSON.parse(savedDecisions) : {};
-                if (!decisions || Array.isArray(decisions) || typeof decisions !== "object") {
-                    throw new Error("Saved task updates have an invalid format.");
-                }
-            } catch (error) {
-                console.error("Could not load task updates.", error);
-                decisions = {};
-                loadError = "Task responses could not be loaded.";
-            }
-
-            renderAssigneeOptions([memberId(familyMembers[0], 0)]);
+            const selected = [...taskAssigneeOptions.querySelectorAll('input:checked')].map(input => input.value);
+            renderAssigneeOptions(selected.length ? selected : [memberId(familyMembers[0], 0)]);
             renderTasks();
         }
 
@@ -1606,22 +1588,7 @@ document.addEventListener("DOMContentLoaded", function () {
             renderTasks();
         });
 
-        addTaskButton.addEventListener("click", () => {
-            addTaskForm.hidden = false;
-            addTaskButton.setAttribute("aria-expanded", "true");
-            newTaskTitle.focus();
-        });
-
-        document.getElementById("cancelAddTask").addEventListener("click", () => {
-            addTaskForm.reset();
-            renderAssigneeOptions([memberId(familyMembers[0], 0)]);
-            newTaskMessage.hidden = true;
-            addTaskForm.hidden = true;
-            addTaskButton.setAttribute("aria-expanded", "false");
-            addTaskButton.focus();
-        });
-
-        addTaskForm.addEventListener("submit", event => {
+        addTaskForm.addEventListener("submit", async event => {
             event.preventDefault();
             newTaskMessage.hidden = true;
             const title = newTaskTitle.value.trim();
@@ -1639,41 +1606,31 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            const newTask = {
-                id: `task-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                title,
-                memberIds,
-                assignedTo: familyMembers
+            const assignedTo = familyMembers
                     .filter((member, index) => memberIds.includes(memberId(member, index)))
                     .map(member => member.name)
-                    .join(", "),
-                assignedBy: householdData.user.name,
-                date: newTaskDate.value,
-                time: newTaskTime.value,
-                status: "requested",
-                completed: false
-            };
-            const nextTasks = [...assignedTasks, newTask];
+                    .join(", ");
             try {
-                localStorage.setItem(tasksStorageKey, JSON.stringify(nextTasks));
-                assignedTasks = nextTasks;
+                await window.roomieCloud.addTask(title, assignedTo, newTaskDate.value, {
+                    memberIds,
+                    assignedBy: householdData.user.name,
+                    date: newTaskDate.value,
+                    time: newTaskTime.value,
+                    status: "requested"
+                });
                 addTaskForm.reset();
                 renderAssigneeOptions([memberId(familyMembers[0], 0)]);
                 addTaskForm.hidden = true;
                 addTaskButton.setAttribute("aria-expanded", "false");
-                renderTasks();
             } catch (error) {
-                console.error("Could not save the new task.", error);
-                newTaskMessage.textContent = "Could not save this task in your browser storage.";
+                console.error("Could not save the new household task.", error);
+                newTaskMessage.textContent = "Could not save this task. Please try again.";
                 newTaskMessage.hidden = false;
             }
         });
 
-        window.addEventListener("storage", event => {
-            if ([tasksStorageKey, decisionsStorageKey, familyStorageKey, "remindRoomieChores"].includes(event.key)) {
-                loadTasks();
-            }
-        });
+        window.addEventListener("roomie:tasks-updated", loadTasks);
+        window.addEventListener("roomie:members-updated", loadTasks);
 
         loadTasks();
     }
@@ -1686,16 +1643,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const familyList = document.getElementById("familyList");
 
     if (familyList) {
-
         const memberForm = document.getElementById("memberForm");
         const addMemberButton = document.getElementById("addMemberButton");
-        const cancelAddMember = document.getElementById("cancelAddMember");
-        const memberName = document.getElementById("memberName");
-        const memberRole = document.getElementById("memberRole");
-        const memberPhoto = document.getElementById("memberPhoto");
+        const memberEmail = document.getElementById("memberEmail");
         const familyMessage = document.getElementById("familyMessage");
-        const storageKey = "remindRoomieFamily";
-        let familyMembers = [...householdData.family];
+        let familyMembers = window.roomieCloud.members.length
+            ? [...window.roomieCloud.members]
+            : [...householdData.family];
 
         function showFamilyMessage(message) {
             familyMessage.textContent = message;
@@ -1704,159 +1658,51 @@ document.addEventListener("DOMContentLoaded", function () {
 
         function renderFamilyMembers() {
             familyList.replaceChildren();
-
             familyMembers.forEach(member => {
                 const card = document.createElement("div");
                 card.className = "task-card";
-
                 const avatar = document.createElement("div");
                 avatar.className = "task-avatar";
-                if (member.color) {
-                    avatar.style.backgroundColor = member.color;
-                }
-
-                if (member.photo) {
-                    const image = document.createElement("img");
-                    image.src = member.photo;
-                    image.alt = "";
-                    avatar.append(image);
-                } else {
-                    avatar.textContent = member.initials || member.name.charAt(0).toUpperCase();
-                }
-
+                avatar.textContent = member.initials || member.name.charAt(0).toUpperCase();
                 const info = document.createElement("div");
                 info.className = "task-info";
-
                 const name = document.createElement("h4");
                 name.textContent = member.name;
                 info.append(name);
-
                 if (member.role) {
                     const role = document.createElement("p");
                     role.textContent = member.role;
                     info.append(role);
                 }
-
                 card.append(avatar, info);
                 familyList.append(card);
             });
         }
 
-        try {
-            const savedMembers = localStorage.getItem(storageKey);
-
-            if (savedMembers) {
-                const parsedMembers = JSON.parse(savedMembers);
-
-                if (!Array.isArray(parsedMembers) || parsedMembers.some(member =>
-                    !member || typeof member.name !== "string" ||
-                    typeof member.role !== "string" ||
-                    typeof member.initials !== "string" ||
-                    (member.photo !== undefined && typeof member.photo !== "string")
-                )) {
-                    throw new Error("Saved family members have an invalid format.");
-                }
-
-                familyMembers = [...familyMembers, ...parsedMembers];
-            }
-        } catch (error) {
-            console.error("Could not load saved family members.", error);
-            showFamilyMessage("Saved members could not be loaded. You can still add a new member.");
-        }
-
         renderFamilyMembers();
 
-        addMemberButton.addEventListener("click", () => {
-            memberForm.hidden = false;
-            addMemberButton.setAttribute("aria-expanded", "true");
-            memberName.focus();
-        });
-
-        cancelAddMember.addEventListener("click", () => {
-            memberForm.reset();
-            familyMessage.hidden = true;
-            memberForm.hidden = true;
-            addMemberButton.setAttribute("aria-expanded", "false");
-            addMemberButton.focus();
-        });
-
-        memberForm.addEventListener("submit", event => {
+        memberForm.addEventListener("submit", async event => {
             event.preventDefault();
             familyMessage.hidden = true;
-
-            const name = memberName.value.trim();
-            const role = memberRole.value.trim();
-            const photoFile = memberPhoto.files[0];
-
-            if (!name) {
-                memberName.focus();
-                showFamilyMessage("Enter a name for the new member.");
-                return;
-            }
-
-            if (photoFile && !photoFile.type.startsWith("image/")) {
-                showFamilyMessage("Choose an image file for the profile picture.");
-                return;
-            }
-
-            if (photoFile && photoFile.size > 2 * 1024 * 1024) {
-                showFamilyMessage("The profile picture must be 2 MB or smaller.");
-                return;
-            }
-
-            function saveMember(photo = "") {
-                const newMember = {
-                    id: `member-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                    name,
-                    role,
-                    initials: name.charAt(0).toUpperCase(),
-                    ...(photo ? { photo } : {})
-                };
-                const updatedMembers = [...familyMembers, newMember];
-
-                try {
-                    localStorage.setItem(
-                        storageKey,
-                        JSON.stringify(updatedMembers.slice(householdData.family.length))
-                    );
-                } catch (error) {
-                    console.error("Could not save the new family member.", error);
-                    showFamilyMessage("Could not save this member in your browser. Try a smaller picture or another browser.");
-                    return;
-                }
-
-                familyMembers = updatedMembers;
-                renderFamilyMembers();
+            try {
+                const email = memberEmail.value.trim();
+                const code = await window.roomieCloud.createInvitation(email);
+                showFamilyMessage(`Send ${email} the household ID ${window.roomieCloud.householdId} and one-time invitation code ${code}.`);
                 memberForm.reset();
-                familyFormClose();
-            }
-
-            function familyFormClose() {
                 memberForm.hidden = true;
                 addMemberButton.setAttribute("aria-expanded", "false");
                 addMemberButton.focus();
+            } catch (error) {
+                console.error("Could not create the household invitation.", error);
+                showFamilyMessage("Could not create an invitation. Confirm the email and try again.");
             }
-
-            if (!photoFile) {
-                saveMember();
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.addEventListener("load", () => {
-                if (typeof reader.result !== "string") {
-                    showFamilyMessage("Could not read the selected picture. Please try another image.");
-                    return;
-                }
-
-                saveMember(reader.result);
-            });
-            reader.addEventListener("error", () => {
-                showFamilyMessage("Could not read the selected picture. Please try another image.");
-            });
-            reader.readAsDataURL(photoFile);
         });
 
+        window.addEventListener("roomie:members-updated", () => {
+            familyMembers = [...window.roomieCloud.members];
+            householdData.family = familyMembers;
+            renderFamilyMembers();
+        });
     }
 
 
