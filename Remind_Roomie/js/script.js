@@ -103,11 +103,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         weekEnd.setDate(weekEnd.getDate() + 7);
         function renderHomeEvents() {
             homeEvents.replaceChildren();
+            // Your personal events, plus shared events you're part of or that the whole family shares
             const personalEvents = [
                 ...householdData.calendar.personal.map(event => ({
                     ...event,
                     owner: meId
-                }))
+                })),
+                ...householdData.calendar.shared
+                    .filter(event => !event.attendees?.length || event.attendees.some(isMe))
+                    .map(event => ({ ...event, kind: "family" }))
             ];
 
             try {
@@ -148,9 +152,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                 .map(event => ({ ...event, ...(eventEdits[event.id] || {}) }))
                 .filter(event => {
                     const eventDate = new Date(`${event.date}T00:00:00`);
-                    return isMe(event.owner) && event.date &&
+                    return event.date &&
                         !Number.isNaN(eventDate.getTime()) &&
-                        eventDate >= today && eventDate < weekEnd;
+                        eventDate >= today && eventDate <= weekEnd;
                 })
                 .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""));
 
@@ -158,12 +162,50 @@ document.addEventListener("DOMContentLoaded", async function () {
                 eventsThisWeek.forEach(event => {
                     const card = document.createElement("article");
                     card.className = "event-card";
-                    const owner = memberForName(event.owner);
+                    // Color by the person the event is for, the same as the calendar
+                    const owner = (event.attendees || []).map(memberFor)
+                        .find(member => member && member.id !== event.owner) || memberFor(event.owner);
                     card.style.backgroundColor = owner?.secondary || "#fbe0fb";
+                    // One circle per person, the same as the calendar cards
                     const avatar = document.createElement("div");
-                    avatar.className = "event-avatar";
-                    avatar.style.backgroundColor = owner?.color || "#f7dafa";
-                    avatar.textContent = owner?.initials || userName.charAt(0).toUpperCase();
+                    avatar.className = "home-event-avatars";
+                    const makeCircle = member => {
+                        const circle = document.createElement("div");
+                        circle.className = "event-avatar";
+                        circle.style.backgroundColor = member?.color || "#f7dafa";
+                        circle.textContent = member?.initials || "?";
+                        return circle;
+                    };
+                    const isFamilyWide = event.kind === "family" && (!event.attendees?.length ||
+                        householdData.family.every(member => member.id === event.owner || event.attendees.includes(member.id)));
+                    if (isFamilyWide) {
+                        const familyCircle = makeCircle(owner);
+                        familyCircle.textContent = "";
+                        const familyIcon = document.createElement("i");
+                        familyIcon.className = "fa-solid fa-users";
+                        familyIcon.setAttribute("aria-hidden", "true");
+                        familyCircle.append(familyIcon);
+                        avatar.append(familyCircle);
+                    } else {
+                        // Up to 3 people show their circle; with more, show 2 and a "+N" circle
+                        const people = (event.attendees || []).map(memberFor).filter(Boolean);
+                        const shown = people.length > 3 ? people.slice(0, 2) : people;
+                        const overlap = shown.length === 3 ? "-14px" : "-8px";
+                        (shown.length ? shown : [owner]).forEach((member, index) => {
+                            const circle = makeCircle(member);
+                            if (index > 0) {
+                                circle.style.marginLeft = overlap;
+                            }
+                            avatar.append(circle);
+                        });
+                        if (people.length > shown.length) {
+                            const more = makeCircle(null);
+                            more.textContent = `+${people.length - shown.length}`;
+                            more.style.backgroundColor = "#eeeeee";
+                            more.style.marginLeft = "-8px";
+                            avatar.append(more);
+                        }
+                    }
                     const details = document.createElement("div");
                     details.className = "event-details";
                     const title = document.createElement("h4");

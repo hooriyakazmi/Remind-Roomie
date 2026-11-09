@@ -1286,6 +1286,20 @@ button {
     background-color: #e5f1ee;
 }
 
+.home-event-avatars {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.home-event-avatars .event-avatar {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    font-size: 13px;
+    color: #080808;
+}
+
 .cal-event-avatars {
     display: flex;
     align-items: center;
