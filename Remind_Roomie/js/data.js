@@ -2,14 +2,14 @@ const householdData = {
     // Each person gets one color from this list when they join. The profile color is
     // the bright shade; the secondary is the lighter card shade.
     colorPalette: [
-        { color: "#8FCDC2", secondary: "#B2E3DA" },
+        { color: "#C0E4A4", secondary: "#dff5d0" },
         { color: "#B9C8FC", secondary: "#D9E2FF" },
         { color: "#B2E6EF", secondary: "#CDE7EC" },
         { color: "#E8C2E8", secondary: "#FBE0FB" },
         { color: "#E8A6A7", secondary: "#F3C4C5" },
         { color: "#EDED97", secondary: "#FBFFD0" },
         { color: "#FAD5B0", secondary: "#FFE2BF" },
-        { color: "#A7A64B", secondary: "#C6E6BB" }
+        { color: "#8da9aecb", secondary: "#d3dbde" }
     ],
 
     user: {
@@ -247,8 +247,8 @@ const householdData = {
             name: "Dan",
             role: "You",
             initials: "D",
-            color: "#8FCDC2",
-            secondary: "#C8E5E0"
+            color: "#C0E4A4",
+            secondary: "#D1F4B9"
         },
         {
             name: "George",

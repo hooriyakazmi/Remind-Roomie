@@ -1379,6 +1379,20 @@ document.addEventListener("DOMContentLoaded", async function () {
             return assignedNames.includes(householdData.user.name) || assignedNames.includes("Household");
         }
 
+        function taskAssignees(task) {
+            const assignedNames = Array.isArray(task.assignedTo)
+                ? task.assignedTo
+                : String(task.assignedTo || "Household").split(",").map(name => name.trim()).filter(Boolean);
+            const assigneesById = (task.memberIds || [])
+                .map(id => familyMembers.find(person => person.id === id))
+                .filter(Boolean);
+            return assigneesById.length
+                ? assigneesById
+                : assignedNames
+                    .map(name => familyMembers.find(person => person.name === name))
+                    .filter(Boolean);
+        }
+
         async function updateTask(task, update, showFeedback = false) {
             try {
                 await window.roomieCloud.updateTask(task.id, update);
@@ -1405,9 +1419,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 ? task.assignedTo
                 : String(task.assignedTo || "Household").split(",").map(name => name.trim()).filter(Boolean);
             // Match by account first, so a renamed person keeps their color on old tasks
-            const assignees = familyMembers.filter(person =>
-                task.memberIds?.includes(person.id) || assignedNames.includes(person.name)
-            );
+            const assignees = taskAssignees(task);
 
             // The card takes the color of the person the task is for, not the person who assigned it
             if (assignees[0]?.secondary) {
@@ -1487,6 +1499,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         function renderRequest(task) {
             const card = document.createElement("article");
             card.className = "task-request-card";
+            const assignees = taskAssignees(task);
+            const assignee = assignees.find(member => member.id === meId) || assignees[0];
+            if (assignee?.secondary) {
+                card.style.backgroundColor = assignee.secondary;
+            }
 
             const title = document.createElement("h3");
             title.className = "task-request-title";
@@ -1807,6 +1824,9 @@ document.addEventListener("DOMContentLoaded", async function () {
             familyMembers.forEach(member => {
                 const card = document.createElement("div");
                 card.className = "task-card";
+                if (member.secondary) {
+                    card.style.backgroundColor = member.secondary;
+                }
                 const avatar = document.createElement("div");
                 avatar.className = "task-avatar";
                 avatar.textContent = member.initials || member.name.charAt(0).toUpperCase();
