@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Calendar</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-gray-6">
+    <link rel="stylesheet" href="css/style.css?v=20261108-addbtn-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -61,6 +61,10 @@
         <section>
             <div class="section-heading">
                 <h2 id="selectedDayTitle"></h2>
+                <button class="add-member-trigger" id="addEventButton" type="button" aria-expanded="false">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    Add event
+                </button>
             </div>
 
             <div id="dayEvents">
@@ -229,12 +233,6 @@
         </div>
     </div>
 
-    <!-- Add Event Button -->
-    <div class="cal-fab-wrap">
-        <button class="cal-add-button" id="addEventButton" aria-label="Add event" aria-expanded="false">
-            <i class="fa-solid fa-plus"></i>
-        </button>
-    </div>
 
 
     <!-- Bottom Navigation -->
@@ -267,9 +265,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-gray-6"></script>
-    <script src="js/data.js?v=20261108-gray-6"></script>
-    <script src="js/script.js?v=20261108-gray-6"></script>
+    <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
+    <script src="js/data.js?v=20261108-addbtn-1"></script>
+    <script src="js/script.js?v=20261108-addbtn-1"></script>
 
 </body>
 </html>
