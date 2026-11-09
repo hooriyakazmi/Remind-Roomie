@@ -86,14 +86,25 @@ export async function updateMyProfile(user, changes) {
   await updateDoc(doc(db, "users", user.uid), changes);
 }
 
-// The default color for a member: the first palette color, starting from a point
-// chosen by the user ID, that no other member has saved. Every page computes the same value.
-function defaultColorFor(uid, members) {
+// Each member's color: their saved color, or a default from the palette. Members without
+// a saved color are handled in account-ID order, so each gets a color nobody else has.
+// Every page computes the same result, so two people never share a color.
+function resolveColors(members) {
   const palette = window.householdData?.colorPalette || [];
-  const taken = new Set(members.filter(member => member.id !== uid).map(member => member.color).filter(Boolean));
-  const seed = [...uid].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const ordered = palette.map((_, index) => palette[(seed + index) % palette.length]);
-  return ordered.find(item => !taken.has(item.color))?.color || "";
+  const taken = new Set(members.map(member => member.color).filter(Boolean));
+  const resolved = new Map(members.map(member => [member.id, member.color || ""]));
+
+  [...members]
+    .filter(member => !member.color)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .forEach(member => {
+      const pick = palette.find(item => !taken.has(item.color));
+      if (!pick) return;
+      resolved.set(member.id, pick.color);
+      taken.add(pick.color);
+    });
+
+  return resolved;
 }
 
 // Save the default for the signed-in user once, if they don't have a color yet.
@@ -101,7 +112,7 @@ function assignDefaultColor(members, user) {
   const me = members.find(member => member.id === user.uid);
   if (!me || me.color) return;
 
-  const color = defaultColorFor(user.uid, members);
+  const color = resolveColors(members).get(user.uid);
   if (!color) return;
 
   updateDoc(doc(db, "users", user.uid), { color }).catch(error => {
@@ -187,9 +198,10 @@ export function createHouseholdCloud(householdId, user, onError) {
       // Cached data can be missing other people's colors, so only assign from server data
       if (!fromCache) assignDefaultColor(members, user);
       const palette = window.householdData?.colorPalette || [];
+      const colors = resolveColors(members);
       cloud.members = members.map(member => {
         const name = member.displayName || "Roommate";
-        const color = member.color || defaultColorFor(member.id, members);
+        const color = colors.get(member.id);
         return {
           id: member.id,
           name,
@@ -202,7 +214,11 @@ export function createHouseholdCloud(householdId, user, onError) {
       cloud.markMembersReady();
       window.householdData.family = cloud.members;
       window.dispatchEvent(new CustomEvent("roomie:members-updated"));
-    }, onError)
+    }, error => {
+      // Release waiting pages even if the member list fails, so they can show the error
+      cloud.markMembersReady();
+      onError(error);
+    })
   ];
   return cloud;
 }

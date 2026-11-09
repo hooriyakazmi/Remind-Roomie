@@ -23,6 +23,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
         status.textContent = "Could not load Firebase. Serve this app over HTTP, check your connection, and reload to retry.";
     }
+    // Wait for the member list so colors are drawn once, with the right values
+    if (window.roomieCloud) {
+        await window.roomieCloud.membersReady;
+    }
     window.roomieAppState = window.roomieCloud ? "ready" : "unavailable";
     if (!window.roomieCloud) return;
 
