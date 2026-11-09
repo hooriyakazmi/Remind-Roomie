@@ -260,3 +260,6 @@ const householdData = {
         }
     ]
 };
+
+// Expose the existing demo data object so authenticated modules can scope it to a household.
+window.householdData = householdData;

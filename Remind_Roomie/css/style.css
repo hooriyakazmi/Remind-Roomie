@@ -792,6 +792,7 @@ button {
 }
 
 .member-form input[type="text"],
+.member-form input[type="email"],
 .member-form input[type="file"] {
     width: 100%;
     min-height: 42px;
@@ -1661,4 +1662,127 @@ button {
     .task-card {
         padding: 12px;
     }
+}
+
+/* Account and sign-in styles reuse the app's teal, rounded-card visual language. */
+.account-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: min(100% - 32px, 430px);
+    margin: 0 auto 14px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: white;
+    color: #555;
+    font-size: 13px;
+}
+
+.account-bar button,
+.auth-switch {
+    border: 0;
+    background: transparent;
+    color: #17675b;
+    font: inherit;
+    font-weight: 700;
+}
+
+.app-status {
+    width: min(100% - 32px, 430px);
+    margin: 12px auto;
+    padding: 12px;
+    border-radius: 10px;
+    background: #fff1f0;
+    color: #9c2f2f;
+    font-size: 13px;
+}
+
+.auth-page {
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+}
+
+.auth-container {
+    width: min(100%, 430px);
+}
+
+.auth-heading {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.auth-heading h1 {
+    margin-bottom: 6px;
+    color: #17675b;
+    font-size: 30px;
+}
+
+.auth-heading p,
+.auth-card > p {
+    color: #6a6969;
+    line-height: 1.5;
+}
+
+.auth-card {
+    display: grid;
+    gap: 18px;
+    padding: 22px;
+    border-radius: 20px;
+    background: white;
+    box-shadow: 0 8px 26px rgb(23 103 91 / 8%);
+}
+
+.auth-card[hidden],
+.auth-form[hidden] {
+    display: none;
+}
+
+.auth-form {
+    display: grid;
+    gap: 10px;
+}
+
+.auth-form + .auth-form {
+    padding-top: 16px;
+    border-top: 1px solid #e8eeeb;
+}
+
+.auth-form h2,
+.auth-form h3,
+.auth-card > h2 {
+    color: #17675b;
+}
+
+.auth-form label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.auth-form input {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background: #fbfcfb;
+    font: inherit;
+}
+
+.auth-form input:focus {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.auth-form .primary-button {
+    margin-top: 6px;
+}
+
+.auth-switch {
+    justify-self: center;
+    padding: 4px;
+}
+
+.auth-message {
+    margin-bottom: 12px;
 }

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remind Roomie - Account</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-page">
+    <main class="auth-container">
+        <header class="auth-heading">
+            <h1>Remind Roomie</h1>
+            <p>Your household, in sync.</p>
+        </header>
+
+        <p class="family-message auth-message" id="authMessage" role="alert" hidden></p>
+
+        <section id="authForms" class="auth-card">
+            <form id="loginForm" class="auth-form">
+                <h2>Welcome back</h2>
+                <label for="loginEmail">Email</label>
+                <input id="loginEmail" type="email" autocomplete="email" required>
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" autocomplete="current-password" required>
+                <button class="primary-button" type="submit">Log in</button>
+            </form>
+
+            <form id="signupForm" class="auth-form" hidden>
+                <h2>Create your account</h2>
+                <label for="displayName">Name</label>
+                <input id="displayName" type="text" maxlength="60" autocomplete="name" required>
+                <label for="signupEmail">Email</label>
+                <input id="signupEmail" type="email" autocomplete="email" required>
+                <label for="signupPassword">Password</label>
+                <input id="signupPassword" type="password" minlength="6" autocomplete="new-password" required>
+                <button class="primary-button" type="submit">Sign up</button>
+            </form>
+
+            <button class="auth-switch" id="showSignup" type="button">New here? Create an account</button>
+            <button class="auth-switch" id="showLogin" type="button" hidden>Already have an account? Log in</button>
+        </section>
+
+        <section id="householdSetup" class="auth-card" hidden>
+            <h2>Set up your household</h2>
+            <p>Hi <span id="signedInName"></span>! Create a household or join one with an invitation.</p>
+
+            <form id="createHouseholdForm" class="auth-form">
+                <h3>Create a household</h3>
+                <label for="householdName">Household name</label>
+                <input id="householdName" type="text" maxlength="80" placeholder="e.g. Maple Street" required>
+                <button class="primary-button" type="submit">Create household</button>
+            </form>
+
+            <form id="joinHouseholdForm" class="auth-form">
+                <h3>Join a household</h3>
+                <label for="joinHouseholdId">Household ID</label>
+                <input id="joinHouseholdId" type="text" autocomplete="off" required>
+                <label for="invitationCode">Invitation code</label>
+                <input id="invitationCode" type="text" autocomplete="off" required>
+                <button class="primary-button" type="submit">Join household</button>
+            </form>
+
+            <button class="auth-switch" id="authSignOut" type="button">Sign out</button>
+        </section>
+    </main>
+    <script type="module" src="js/auth-page.js"></script>
+</body>
+</html>

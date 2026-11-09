@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function householdPath(householdId) {
+      return /databases/$(database)/documents/households/$(householdId);
+    }
+
+    function invitationPath(householdId, invitationId) {
+      return /databases/$(database)/documents/households/$(householdId)/invitations/$(invitationId);
+    }
+
+    // Check current membership, never membership proposed by a pending write.
+    function isMember(householdId) {
+      return signedIn()
+        && exists(profilePath(request.auth.uid))
+        && get(profilePath(request.auth.uid)).data.householdId == householdId;
+    }
+
+    function profileHasRequiredFields(data) {
+      return data.keys().hasAll(['email', 'displayName', 'householdId'])
+        && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId'])
+        && data.email == request.auth.token.email
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && (data.householdId == null || data.householdId is string);
+    }
+
+    // The household must be NEW and created in this same atomic batch.
+    function canCreateHousehold(householdId) {
+      return householdId is string
+        && householdId.size() > 0
+        && resource.data.householdId == null
+        && !exists(householdPath(householdId))
+        && getAfter(householdPath(householdId)).data.createdBy == request.auth.uid
+        && request.resource.data.get('invitationId', null) == resource.data.get('invitationId', null);
+    }
+
+    // Both sides of an invitation redemption must change together. A previously
+    // accepted invitation is insufficient, even if it names this same user.
+    function canJoinInvitedHousehold(householdId) {
+      let invitationId = request.resource.data.get('invitationId', '');
+      let path = invitationPath(householdId, invitationId);
+      return householdId is string
+        && householdId.size() > 0
+        && resource.data.householdId == null
+        && invitationId is string
+        && invitationId.size() > 0
+        && exists(householdPath(householdId))
+        && get(path).data.householdId == householdId
+        && get(path).data.email == request.auth.token.email
+        && get(path).data.status == 'pending'
+        && getAfter(path).data.status == 'accepted'
+        && getAfter(path).data.acceptedBy == request.auth.uid
+        && getAfter(path).data.acceptedAt == request.time;
+    }
+
+    match /users/{uid} {
+      // Signup/profile recovery cannot grant household membership.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && profileHasRequiredFields(request.resource.data)
+        && request.resource.data.householdId == null
+        && !request.resource.data.keys().hasAny(['invitationId']);
+
+      // Supports the app's where('householdId', '==', householdId) query.
+      allow get, list: if signedIn()
+        && (request.auth.uid == uid
+          || (resource.data.householdId != null && isMember(resource.data.householdId)));
+
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && profileHasRequiredFields(request.resource.data)
+        && (
+          (request.resource.data.householdId == resource.data.householdId
+            && request.resource.data.get('invitationId', null) == resource.data.get('invitationId', null))
+          || canCreateHousehold(request.resource.data.householdId)
+          || canJoinInvitedHousehold(request.resource.data.householdId)
+        );
+
+      allow delete: if false;
+
+      match /imports/{householdId} {
+        allow read: if signedIn() && request.auth.uid == uid && isMember(householdId);
+        allow create: if signedIn() && request.auth.uid == uid && isMember(householdId)
+          && request.resource.data.keys().hasOnly(['importedAt'])
+          && request.resource.data.importedAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    match /households/{householdId} {
+      // Mirrors createHousehold(): create the household and update an existing,
+      // unassigned user profile in one batch. Neither write may succeed alone.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['name', 'createdBy', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'createdAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && exists(profilePath(request.auth.uid))
+        && get(profilePath(request.auth.uid)).data.householdId == null
+        && getAfter(profilePath(request.auth.uid)).data.householdId == householdId;
+      allow get: if isMember(householdId);
+      allow list, update, delete: if false;
+
+      // Tasks are collaborative: current household members retain all of the
+      // app's request, rescheduling, completion, and legacy import operations.
+      match /tasks/{taskId} {
+        allow read, write: if isMember(householdId);
+      }
+
+      match /events/{eventId} {
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isMember(householdId)
+          && resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if isMember(householdId)
+          && resource.data.createdBy == request.auth.uid;
+      }
+
+      match /invitations/{invitationId} {
+        allow create: if isMember(householdId)
+          && request.resource.data.keys().hasAll(['householdId', 'email', 'status', 'createdBy', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['householdId', 'email', 'status', 'createdBy', 'createdAt'])
+          && request.resource.data.householdId == householdId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.email is string
+          && request.resource.data.email.size() > 0
+          && request.resource.data.status == 'pending';
+
+        allow get: if isMember(householdId)
+          || (signedIn() && resource.data.email == request.auth.token.email);
+        allow list: if isMember(householdId);
+
+        // Freeze recipient, household, creator, and creation metadata; require
+        // the invitee's previously unassigned profile to join in this batch.
+        allow update: if signedIn()
+          && exists(householdPath(householdId))
+          && resource.data.householdId == householdId
+          && resource.data.status == 'pending'
+          && resource.data.email == request.auth.token.email
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'acceptedBy', 'acceptedAt'])
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.acceptedBy == request.auth.uid
+          && request.resource.data.acceptedAt == request.time
+          && exists(profilePath(request.auth.uid))
+          && get(profilePath(request.auth.uid)).data.householdId == null
+          && getAfter(profilePath(request.auth.uid)).data.householdId == householdId
+          && getAfter(profilePath(request.auth.uid)).data.invitationId == invitationId;
+
+        allow delete: if isMember(householdId);
+      }
+    }
+  }
+}
