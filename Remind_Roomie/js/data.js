@@ -8,7 +8,7 @@ const householdData = {
         { color: "#E8C2E8", secondary: "#FBE0FB" },
         { color: "#E8A6A7", secondary: "#f5cccc" },
         { color: "#EDED97", secondary: "#FBFFD0" },
-        { color: "#FAD5B0", secondary: "#fbe4c9" },
+        { color: "#FAD5B0", secondary: "#faebd9" },
         { color: "#8da9aecb", secondary: "#d3dbde" }
     ],
 
