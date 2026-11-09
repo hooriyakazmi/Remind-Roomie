@@ -405,45 +405,46 @@ button {
 
 .task-notifications,
 .task-history {
-    margin-bottom: 22px;
+    margin-bottom: 14px;
 }
 
 .task-request-card {
-    margin-bottom: 13px;
-    padding: 16px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
     border: 1px solid #e1e5e3;
-    border-radius: 15px;
+    border-radius: 12px;
     background-color: white;
 }
 
 .task-request-title {
-    margin-bottom: 8px;
-    font-size: 19px;
+    margin-bottom: 3px;
+    font-size: 15px;
 }
 
 .task-assigned-by {
-    margin-bottom: 5px;
-    font-size: 15px;
+    margin-bottom: 2px;
+    font-size: 12px;
 }
 
 .task-due {
     color: #777;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .task-request-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 16px;
+    gap: 6px;
+    margin-top: 8px;
 }
 
 .task-action-button {
-    min-height: 44px;
-    padding: 10px 14px;
+    min-height: 32px;
+    padding: 5px 10px;
     border: 1px solid #17675b;
-    border-radius: 22px;
+    border-radius: 16px;
     font: inherit;
+    font-size: 13px;
     font-weight: 700;
 }
 
@@ -459,7 +460,7 @@ button {
 
 .reschedule-task {
     width: 100%;
-    margin-top: 9px;
+    margin-top: 6px;
     background-color: #e5f1ee;
     color: #17675b;
 }
@@ -638,19 +639,20 @@ button {
 .reschedule-form {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 6px;
+    margin-top: 8px;
 }
 
 .reschedule-form input {
     width: 100%;
     min-width: 0;
-    min-height: 42px;
-    padding: 8px;
+    min-height: 34px;
+    padding: 5px 8px;
     border: 1px solid #d6ddda;
     border-radius: 9px;
     background-color: #fbfcfb;
     font: inherit;
+    font-size: 13px;
 }
 
 /* ==============================
