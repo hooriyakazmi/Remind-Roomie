@@ -9,7 +9,7 @@ const householdData = {
         { color: "#E8A6A7", secondary: "#f5cccc" },
         { color: "#EDED97", secondary: "#FBFFD0" },
         { color: "#FAD5B0", secondary: "#fff2e2" },
-        { color: "#9dbcc1", secondary: "#aec3cb" }
+        { color: "#9dbcc1", secondary: "#abc8ce" }
     ],
 
     user: {
