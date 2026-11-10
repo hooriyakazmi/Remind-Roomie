@@ -5,7 +5,7 @@ const path = require('node:path');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
 const {
   doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, writeBatch, serverTimestamp, Timestamp, setLogLevel, deleteField
+  query, where, writeBatch, serverTimestamp, Timestamp, setLogLevel, deleteField, onSnapshot
 } = require('firebase/firestore');
 
 // Refuse to run against production. The CLI supplies this only inside emulators:exec.
@@ -304,7 +304,7 @@ test('legacy import batch matches legacy-import.js and markers cannot be overwri
 
 // Load the unchanged browser modules with the real emulator SDK. Only their
 // Firebase configuration and Auth transport are supplied by the test harness.
-async function actualHouseholdApi(db, user) {
+async function actualHouseholdApi(db, user, entryFile = 'firebase-household.js') {
   const vm = require('node:vm');
   const root = path.resolve(__dirname, '../Remind_Roomie/js');
   // Use the main VM realm so Firebase's plain-object checks see app payloads
@@ -320,7 +320,7 @@ async function actualHouseholdApi(db, user) {
   synthetic('firestore', require('firebase/firestore'));
   synthetic('auth', {
     createUserWithEmailAndPassword() { throw new Error('Auth signup is outside these Firestore tests.'); },
-    updateProfile() { throw new Error('Auth profile updates are outside these Firestore tests.'); }
+    async updateProfile(user, changes) { Object.assign(user, changes); }
   });
   async function link(specifier, parent) {
     const id = specifier.startsWith('https:')
@@ -332,7 +332,7 @@ async function actualHouseholdApi(db, user) {
     await module.link(link);
     return module;
   }
-  const module = await link('./firebase-household.js', { identifier: path.join(root, '_test.js') });
+  const module = await link('./' + entryFile, { identifier: path.join(root, '_test.js') });
   await module.evaluate();
   return module.namespace;
 }
@@ -365,4 +365,84 @@ test('actual browser createHousehold, invitation, joinHousehold and member liste
   await assertFails(charlieApi.joinHousehold(householdId, code, charlie));
   const outsiderApi = await actualHouseholdApi(client('eve'), { uid: 'eve', email: email('eve') });
   await assert.rejects(outsiderApi.joinHousehold(householdId, code, { uid: 'eve', email: email('eve') }));
+});
+
+
+test('actual name update preserves former names and membership; other members can read the new profile', async () => {
+  const db = client('alice');
+  const user = { uid: 'alice', email: email('alice'), displayName: 'alice' };
+  const api = await actualHouseholdApi(db, user);
+  await api.updateMyProfile(user, { displayName: '  Robin  ' });
+  let saved = (await getDoc(doc(db, 'users/alice'))).data();
+  assert.equal(saved.displayName, 'Robin');
+  assert.deepEqual(saved.previousNames, ['alice']);
+  assert.equal(saved.householdId, 'home');
+  assert.equal(user.displayName, 'Robin');
+  await api.updateMyProfile(user, { displayName: 'Sam' });
+  await api.updateMyProfile(user, { color: '#90cdd8' });
+  saved = (await getDoc(doc(db, 'users/alice'))).data();
+  assert.deepEqual(saved.previousNames, ['alice', 'Robin']);
+  assert.equal(saved.color, '#90cdd8');
+  await createInvite();
+  await join(client('bob'));
+  const members = await getDocs(query(collection(client('bob'), 'users'), where('householdId', '==', 'home')));
+  assert.equal(members.docs.find(member => member.id === 'alice').data().displayName, 'Sam');
+});
+
+test('name history rejects arbitrary additions and rewrites without weakening membership permissions', async () => {
+  const db = client('alice');
+  await assertFails(updateDoc(doc(db, 'users/alice'), { previousNames: ['eve'] }));
+  await assertFails(updateDoc(doc(db, 'users/alice'), { displayName: 'Robin', previousNames: ['eve'] }));
+  await assertFails(setDoc(doc(client('new'), 'users/new'), { ...profile('new'), previousNames: ['alice'] }));
+  await assertSucceeds(updateDoc(doc(db, 'users/alice'), { displayName: 'Robin', previousNames: ['alice'] }));
+  await assertFails(updateDoc(doc(db, 'users/alice'), { previousNames: [] }));
+  await assertFails(updateDoc(doc(db, 'users/alice'), { displayName: 'Sam', previousNames: ['alice', 'Robin'], householdId: 'other' }));
+  await assertFails(updateDoc(doc(client('eve'), 'users/alice'), { displayName: 'Taken', previousNames: ['alice', 'Robin'] }));
+});
+
+test('actual task responses deliver to the assigner and preserve rescheduling and rejection history', async () => {
+  await seed({ 'users/bob': profile('bob', 'home') });
+  const alice = client('alice');
+  const bob = client('bob');
+  await setDoc(taskRef(alice), { ...task(), assignedById: 'alice' });
+  const api = await actualHouseholdApi(bob, { uid: 'bob' }, 'firebase-tasks.js');
+  const members = [{ id: 'alice', name: 'alice' }, { id: 'bob', name: 'bob' }];
+  let stop;
+  let timeout;
+  const received = new Promise((resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error('Task response was not delivered.')), 10000);
+    stop = onSnapshot(taskRef(alice), snapshot => {
+      const notes = Object.values(snapshot.data()?.responses || {});
+      if (notes.length) resolve(notes[0]);
+    }, reject);
+  });
+  try {
+    await api.respondToTask('home', 'task', { uid: 'bob' }, members,
+      { action: 'rescheduled', reason: 'Working late.', date: '2026-11-14', time: '14:00' });
+    const delivered = await received;
+    assert.equal(delivered.recipientId, 'alice');
+    assert.equal(delivered.senderId, 'bob');
+    assert.equal(delivered.reason, 'Working late.');
+    assert.equal(typeof delivered.createdAt.toMillis(), 'number');
+    await api.respondToTask('home', 'task', { uid: 'bob' }, members, { action: 'rejected', reason: 'I am away.' });
+    const saved = (await getDoc(taskRef(alice))).data();
+    assert.equal(saved.status, 'rejected');
+    assert.equal(saved.date, '2026-11-14');
+    assert.equal(Object.keys(saved.responses).length, 2);
+    await assertFails(getDoc(taskRef(client('eve'))));
+  } finally { clearTimeout(timeout); stop?.(); }
+});
+
+test('task response failures leave the task unchanged and unrelated users cannot send responses', async () => {
+  await seed({ 'users/bob': profile('bob', 'home') });
+  const alice = client('alice');
+  await setDoc(taskRef(alice), { ...task(), assignedById: 'alice' });
+  const api = await actualHouseholdApi(client('bob'), { uid: 'bob' }, 'firebase-tasks.js');
+  const members = [{ id: 'alice', name: 'alice' }, { id: 'bob', name: 'bob' }];
+  await assert.rejects(api.respondToTask('home', 'task', { uid: 'bob' }, members, { action: 'rejected', reason: '   ' }));
+  const other = await actualHouseholdApi(client('eve'), { uid: 'eve' }, 'firebase-tasks.js');
+  await assertFails(other.respondToTask('home', 'task', { uid: 'eve' }, members, { action: 'rejected', reason: 'No' }));
+  const current = (await getDoc(taskRef(alice))).data();
+  assert.equal(current.status, 'requested');
+  assert.equal(current.responses, undefined);
 });

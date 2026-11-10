@@ -1,6 +1,16 @@
 // Keep basic form interactions independent of Firebase and the main app script.
 // This classic script runs after the page markup, without waiting for cloud setup.
 (function () {
+    function guardSubmission(event, message) {
+        if (window.roomieAppState === "ready" && window.roomieCloud) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        message.textContent = window.roomieAppState === "loading"
+            ? "Your household is still loading. Please wait, then try again."
+            : "Your household could not be loaded. Sign in and reload this page to try again.";
+        message.hidden = false;
+    }
+
     [
         ["openAddTask", "addTaskForm", "cancelAddTask", "newTaskTitle", "newTaskMessage"],
         ["addMemberButton", "memberForm", "cancelAddMember", "memberEmail", "familyMessage"]
@@ -23,13 +33,13 @@
             trigger.focus();
         });
         form.addEventListener("submit", event => {
-            if (window.roomieAppState === "ready" && window.roomieCloud) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            message.textContent = window.roomieAppState === "loading"
-                ? "Your household is still loading. Please wait, then try again."
-                : "Your household could not be loaded. Sign in and reload this page to try again.";
-            message.hidden = false;
+            guardSubmission(event, message);
         });
     });
+    const nameForm = document.getElementById("settingsNameForm");
+    if (nameForm) {
+        nameForm.addEventListener("submit", event => {
+            guardSubmission(event, document.getElementById("settingsMessage"));
+        });
+    }
 })();

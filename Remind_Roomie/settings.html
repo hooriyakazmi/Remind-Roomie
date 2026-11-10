@@ -4,26 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Settings</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20261108-task-responses-4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
 <body>
 
-    <main class="container">
+    <main class="container" id="settingsPage">
 
         <header class="page-header">
             <h1 class="page-title">Settings</h1>
             <p>Choose how you appear to your household.</p>
         </header>
 
+        <p class="settings-message" id="settingsMessage" role="status" hidden></p>
+
         <section class="settings-card">
             <h2>Your name</h2>
             <form class="settings-form" id="settingsNameForm">
                 <label for="settingsName">Display name</label>
-                <input id="settingsName" type="text" maxlength="40" autocomplete="name">
+                <input id="settingsName" type="text" maxlength="60" autocomplete="name" required>
                 <div class="member-form-actions">
-                    <button class="primary-button" type="submit">Save name</button>
+                    <button class="primary-button" id="saveNameButton" type="submit">Save name</button>
                 </div>
             </form>
         </section>
@@ -35,8 +37,6 @@
                 <!-- Color options are added using JavaScript -->
             </div>
         </section>
-
-        <p class="settings-message" id="settingsMessage" role="status" hidden></p>
 
     </main>
 
@@ -75,9 +75,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-controls-2"></script>
+    <script src="js/form-controls.js?v=20261108-profile-3"></script>
     <script src="js/data.js?v=20261108-controls-2"></script>
-    <script src="js/script.js?v=20261108-controls-2"></script>
+    <script src="js/script.js?v=20261108-task-responses-4"></script>
 
 </body>
 </html>

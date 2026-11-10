@@ -7,7 +7,7 @@ const jsRoot = path.resolve(__dirname, '../Remind_Roomie/js');
 
 // Exercise the real adapters with an in-memory Firebase API. No live project writes.
 async function loadModule(file, sdk, globals = {}) {
-  const context = vm.createContext({ console, ...globals });
+  const context = vm.createContext({ console, crypto: require('node:crypto').webcrypto, ...globals });
   const cache = new Map();
   function synthetic(key, values) {
     const module = new vm.SyntheticModule(Object.keys(values), function () {
@@ -18,7 +18,7 @@ async function loadModule(file, sdk, globals = {}) {
   }
   synthetic(path.join(jsRoot, 'firebase-config.js'), { db: {}, auth: { currentUser: { uid: 'alice' } } });
   synthetic('firestore', sdk);
-  synthetic('auth', globals.authSdk || { createUserWithEmailAndPassword() {}, updateProfile() {} });
+  synthetic('auth', { createUserWithEmailAndPassword() {}, updateProfile: async () => {}, ...globals.authSdk });
   async function resolve(id, parent) {
     const key = id.startsWith('https:') ? (id.includes('firebase-auth') ? 'auth' : 'firestore') : path.resolve(path.dirname(parent.identifier), id);
     if (cache.has(key)) return cache.get(key);
@@ -42,11 +42,26 @@ function mockFirestore() {
     doc: (_db, ...parts) => parts.join('/'),
     serverTimestamp: () => 'SERVER_TIMESTAMP',
     addDoc: async (ref, data) => { writes.push({ ref, data }); return { id: 'new-task' }; },
-    updateDoc: async (ref, data) => { writes.push({ ref, data }); },
+    updateDoc: async (ref, data) => {
+      writes.push({ ref, data });
+      const updated = { ...stored.get(ref) };
+      for (const [key, value] of Object.entries(data)) {
+        const parts = key.split('.');
+        let target = updated;
+        for (const part of parts.slice(0, -1)) target = target[part] = { ...target[part] };
+        target[parts.at(-1)] = value;
+      }
+      stored.set(ref, updated);
+    },
     setDoc: async (ref, data) => { stored.set(ref, data); },
     deleteDoc: async ref => { writes.push({ ref, deleted: true }); },
     getDoc: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
     onSnapshot: (ref, next, error) => { listeners.push({ ref, next, error }); return () => stopped++; },
+    runTransaction: async (_db, callback) => {
+      const pending = [];
+      await callback({ get: sdk.getDoc, update: (ref, data) => pending.push({ ref, data }) });
+      for (const { ref, data } of pending) await sdk.updateDoc(ref, data);
+    },
     query: ref => ref,
     where: () => {},
     writeBatch: () => {
@@ -188,10 +203,13 @@ async function loadPage(page, cloud, saved = storage(), options = {}) {
     querySelectorAll: () => []
   };
   const window = { roomieHouseholdReady: options.missingReady ? undefined : options.ready || Promise.resolve(), roomieCloud: cloud,
-    addEventListener: (type, fn) => listeners[type] = fn, scrollTo() {} };
+    addEventListener: (type, fn) => {
+      const previous = listeners[type];
+      listeners[type] = event => { previous?.(event); return fn(event); };
+    }, scrollTo() {} };
   const householdData = {
     user: { name: 'Alice', initials: 'A' }, family: [{ id: 'alice', name: 'Alice' }], tasks: cloud?.tasks || [],
-    calendar: { personal: [], housemates: [], shared: [] }
+    calendar: { personal: [], housemates: [], shared: [] }, colorPalette: []
   };
   const context = vm.createContext({
     window, document, householdData, localStorage: saved, console: options.console || console, setTimeout, clearTimeout,
@@ -307,7 +325,7 @@ test('login retries profile failures and recovers an account missing its Firesto
     onAuthStateChanged: (_auth, callback) => authChanged = callback,
     signInWithEmailAndPassword: async () => ({ user }),
     signOut: async () => {},
-    createUserWithEmailAndPassword() {}, updateProfile() {}
+    createUserWithEmailAndPassword() {}, async updateProfile() {}
   } });
   listeners.DOMContentLoaded();
   authChanged(user);
@@ -335,7 +353,7 @@ test('protected pages wait for the household and release listeners on sign-out',
     authSdk: {
       onAuthStateChanged: (_auth, callback) => authChanged = callback,
       signOut: async () => authChanged(null),
-      createUserWithEmailAndPassword() {}, updateProfile() {}
+      createUserWithEmailAndPassword() {}, async updateProfile() {}
     }
   });
   await authChanged({ uid: 'alice' });
@@ -361,7 +379,7 @@ test('protected page reports a failed household fetch without redirecting in a l
     document: { getElementById: id => id === 'signOutButton' ? new Element() : null, createElement: () => new Element(), body },
     authSdk: {
       onAuthStateChanged: (_auth, callback) => authChanged = callback,
-      signOut() {}, createUserWithEmailAndPassword() {}, updateProfile() {}
+      signOut() {}, createUserWithEmailAndPassword() {}, async updateProfile() {}
     }
   });
   await authChanged({ uid: 'alice' });
@@ -442,4 +460,128 @@ test('a blocked Firebase module reports an error without disabling the Assign ta
   assert.match(page.document.body.children[0].textContent, /Could not load Firebase/);
   page.elements.get('openAddTask').listeners.click();
   assert.equal(page.elements.get('addTaskForm').hidden, false);
+});
+
+test('name changes persist history, trim input, synchronize Auth, and preserve profile fields', async () => {
+  const fake = mockFirestore();
+  fake.stored.set('users/alice', { email: 'alice@example.com', displayName: 'Alice', householdId: 'home', color: '#90cdd8' });
+  const authUpdates = [];
+  const api = await loadModule('firebase-household.js', fake.sdk, { authSdk: { updateProfile: async (user, change) => authUpdates.push({ uid: user.uid, ...change }) } });
+  await api.updateMyProfile({ uid: 'alice' }, { displayName: '  Robin  ' });
+  let saved = fake.stored.get('users/alice');
+  assert.equal(saved.displayName, 'Robin');
+  assert.deepEqual(Array.from(saved.previousNames), ['Alice']);
+  assert.equal(saved.color, '#90cdd8');
+  assert.equal(saved.householdId, 'home');
+  await api.updateMyProfile({ uid: 'alice' }, { displayName: 'Sam' });
+  saved = fake.stored.get('users/alice');
+  assert.deepEqual(Array.from(saved.previousNames), ['Alice', 'Robin']);
+  assert.deepEqual(authUpdates.map(item => item.displayName), ['Robin', 'Sam']);
+  await assert.rejects(api.updateMyProfile({ uid: 'alice' }, { displayName: '   ' }), /between 1 and 60/);
+  await assert.rejects(api.updateMyProfile({ uid: 'alice' }, { displayName: 'x'.repeat(61) }), /between 1 and 60/);
+  assert.equal(fake.stored.get('users/alice').displayName, 'Sam');
+});
+
+test('failed profile writes do not change the Auth name', async () => {
+  const fake = mockFirestore();
+  fake.stored.set('users/alice', { displayName: 'Alice', householdId: 'home' });
+  fake.sdk.runTransaction = async () => { throw new Error('permission-denied'); };
+  let authCalls = 0;
+  const api = await loadModule('firebase-household.js', fake.sdk, { authSdk: { updateProfile: async () => authCalls++ } });
+  await assert.rejects(api.updateMyProfile({ uid: 'alice' }, { displayName: 'Robin' }), /permission-denied/);
+  assert.equal(authCalls, 0);
+});
+
+test('member snapshots update the signed-in identity and preserve former names for old references', async () => {
+  const fake = mockFirestore();
+  const window = { householdData: { user: { name: 'Alice' }, calendar: {} }, dispatchEvent() {} };
+  const api = await loadModule('firebase-household.js', fake.sdk, { window, CustomEvent: class { constructor(type) { this.type = type; } } });
+  const cloud = api.createHouseholdCloud('home', { uid: 'alice' }, () => {});
+  fake.listeners[2].next({ metadata: { fromCache: true }, docs: [{ id: 'alice', data: () => ({ displayName: 'Robin', previousNames: ['Alice'] }) }] });
+  assert.equal(window.householdData.user.name, 'Robin');
+  assert.equal(window.householdData.user.initials, 'R');
+  assert.equal(cloud.members[0].previousNames[0], 'Alice');
+});
+
+test('live renames update the home identity without losing legacy name-only tasks', async () => {
+  const cloud = { user: { uid: 'alice' }, members: [{ id: 'alice', name: 'Alice', initials: 'A' }],
+    tasks: [{ id: 'task', title: 'Trash', assignedTo: 'Alice', assignedBy: 'Alice', status: 'accepted' }] };
+  const page = await loadPage('index', cloud);
+  cloud.members = [{ id: 'alice', name: 'Robin', initials: 'R', previousNames: ['Alice'] }];
+  page.householdData.family = cloud.members;
+  page.householdData.user = { name: 'Robin', initials: 'R' };
+  page.listeners['roomie:members-updated']();
+  assert.equal(page.elements.get('userName').textContent, 'Robin');
+  assert.equal(page.elements.get('accountName').textContent, 'Robin');
+  assert.equal(page.elements.get('profileAvatar').textContent, 'R');
+  assert.equal(page.elements.get('homeTasks').children[0].className, 'event-card');
+});
+
+test('an Auth synchronization failure does not misreport or undo a saved app name', async () => {
+  const fake = mockFirestore();
+  fake.stored.set('users/alice', { displayName: 'Alice', householdId: 'home' });
+  const api = await loadModule('firebase-household.js', fake.sdk, {
+    console: { ...console, warn() {} },
+    authSdk: { updateProfile: async () => { throw new Error('Auth offline'); } }
+  });
+  await api.updateMyProfile({ uid: 'alice' }, { displayName: 'Robin' });
+  assert.equal(fake.stored.get('users/alice').displayName, 'Robin');
+  assert.equal(fake.stored.get('users/alice').previousNames[0], 'Alice');
+});
+
+test('rescheduling and rejecting atomically preserve explanations and route them to the assigner', async () => {
+  const fake = mockFirestore();
+  const ref = 'households/home/tasks/one';
+  fake.stored.set(ref, { title: 'Dishes', memberIds: ['alice'], assignedById: 'bob', date: '2030-03-10', time: '10:00', status: 'requested' });
+  fake.stored.set('users/bob', { displayName: 'Bob', householdId: 'home' });
+  const api = await loadModule('firebase-tasks.js', fake.sdk);
+  const members = [{ id: 'alice', name: 'Alice' }, { id: 'bob', name: 'Bob' }];
+  await api.respondToTask('home', 'one', { uid: 'alice' }, members,
+    { action: 'rescheduled', date: '2030-03-12', time: '14:00', reason: '  Working late.  ' });
+  let saved = fake.stored.get(ref);
+  let notes = Object.values(saved.responses);
+  assert.equal(saved.date, '2030-03-12');
+  assert.equal(saved.dueDate, '2030-03-12');
+  assert.equal(saved.status, 'requested');
+  assert.equal(notes[0].reason, 'Working late.');
+  assert.equal(notes[0].recipientId, 'bob');
+  assert.equal(notes[0].senderId, 'alice');
+  assert.equal(notes[0].createdAt, 'SERVER_TIMESTAMP');
+  assert.equal(notes[0].previousDate, '2030-03-10');
+  await api.respondToTask('home', 'one', { uid: 'alice' }, members, { action: 'rejected', reason: 'I am away that week.' });
+  saved = fake.stored.get(ref);
+  notes = Object.values(saved.responses);
+  assert.equal(saved.status, 'rejected');
+  assert.equal(notes.length, 2);
+  assert.equal(notes[1].previousDate, '2030-03-12');
+});
+
+test('invalid, stale, and unassigned task responses do not write changes', async () => {
+  const fake = mockFirestore();
+  const ref = 'households/home/tasks/one';
+  fake.stored.set(ref, { memberIds: ['alice'], assignedById: 'bob', status: 'requested' });
+  fake.stored.set('users/bob', { householdId: 'home' });
+  const api = await loadModule('firebase-tasks.js', fake.sdk);
+  for (const response of [
+    { action: 'rejected', reason: '   ' },
+    { action: 'rejected', reason: 'x'.repeat(1001) },
+    { action: 'rescheduled', reason: 'Work', date: '2030-02-31' }
+  ]) await assert.rejects(api.respondToTask('home', 'one', { uid: 'alice' }, [], response));
+  await assert.rejects(api.respondToTask('home', 'one', { uid: 'bob' }, [], { action: 'rejected', reason: 'No' }), /Only a person assigned/);
+  fake.stored.set(ref, { memberIds: ['alice'], status: 'accepted' });
+  await assert.rejects(api.respondToTask('home', 'one', { uid: 'alice' }, [], { action: 'rejected', reason: 'No' }), /already been answered/);
+  assert.equal(fake.writes.length, 0);
+});
+
+test('legacy task responses identify renamed assigners and fail safely when the assigner is ambiguous', async () => {
+  const fake = mockFirestore();
+  const ref = 'households/home/tasks/one';
+  fake.stored.set(ref, { assignedTo: 'Alice', assignedBy: 'Bob', status: 'requested' });
+  fake.stored.set('users/bob', { displayName: 'Robin', householdId: 'home' });
+  const api = await loadModule('firebase-tasks.js', fake.sdk);
+  const members = [{ id: 'alice', name: 'Alice' }, { id: 'bob', name: 'Robin', previousNames: ['Bob'] }];
+  await api.respondToTask('home', 'one', { uid: 'alice' }, members, { action: 'rejected', reason: 'Out of town.' });
+  assert.equal(fake.stored.get(ref).assignedById, 'bob');
+  fake.stored.set(ref, { assignedTo: 'Alice', assignedBy: 'Bob', status: 'requested' });
+  await assert.rejects(api.respondToTask('home', 'one', { uid: 'alice' }, [...members, { id: 'other', name: 'Bob' }], { action: 'rejected', reason: 'Out of town.' }), /could not be identified/);
 });

@@ -35,8 +35,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Identify people by account ID, so a rename doesn't detach their events or color.
     // Older events were saved with names, so names still count as a match.
     const meId = window.roomieCloud.user.uid;
-    const isMe = value => value === meId || value === householdData.user.name;
-    const memberFor = value => householdData.family.find(member => member.id === value || member.name === value);
+    const memberFor = value => {
+        const byId = householdData.family.find(member => member.id === value);
+        if (byId) return byId;
+        const matches = householdData.family.filter(member =>
+            member.name === value || member.previousNames?.includes(value)
+        );
+        // Older name-only records cannot identify two people with the same name.
+        return matches.length === 1 ? matches[0] : undefined;
+    };
+    const isMe = value => value === meId || memberFor(value)?.id === meId;
     const nameOf = value => memberFor(value)?.name || value;
     const myColor = () => memberFor(meId)?.color || "";
 
@@ -46,6 +54,22 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
 
+
+    function renderIdentity() {
+        const name = householdData.user.name;
+        const initials = householdData.user.initials;
+        const accountName = document.getElementById("accountName");
+        const userName = document.getElementById("userName");
+        const avatar = document.getElementById("profileAvatar");
+        if (accountName) accountName.textContent = name;
+        if (userName) userName.textContent = name;
+        if (avatar) {
+            avatar.textContent = initials;
+            avatar.style.backgroundColor = myColor();
+        }
+    }
+    renderIdentity();
+    window.addEventListener("roomie:members-updated", renderIdentity);
 
     // --------------------------------
     // HOME PAGE
@@ -79,7 +103,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             });
 
 
-        const userName = householdData.user.name;
         const memberForName = memberFor;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -147,7 +170,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     const avatar = document.createElement("div");
                     avatar.className = "event-avatar";
                     avatar.style.backgroundColor = owner?.color || "#f7dafa";
-                    avatar.textContent = owner?.initials || userName.charAt(0).toUpperCase();
+                    avatar.textContent = owner?.initials || householdData.user.name.charAt(0).toUpperCase();
                     const details = document.createElement("div");
                     details.className = "event-details";
                     const title = document.createElement("h4");
@@ -187,7 +210,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
-            return assignedNames.includes(userName) || assignedNames.includes("Household");
+            return assignedNames.some(isMe) || assignedNames.includes("Household");
         };
         const formatTaskDue = task => {
             if (task.date) {
@@ -445,7 +468,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         // The person an event is for: the first attendee who isn't the creator.
         // Events with no one else listed (your own, or family-wide) use the creator.
         function recipientOf(event) {
-            const recipientId = (event.attendees || []).find(value => memberFor(value) && value !== event.owner);
+            const recipientId = (event.attendees || []).find(value => memberFor(value) && memberFor(value)?.id !== memberFor(event.owner)?.id);
             return memberFor(recipientId) || ownerOf(event);
         }
 
@@ -646,7 +669,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         // Lists every family member as a chip, with you selected by default
-        function renderEventAssignees() {
+        function renderEventAssignees(selectedIds) {
+            const existing = [...eventAssignees.querySelectorAll('input[name="eventAssignee"]')];
+            const selected = selectedIds || (existing.length
+                ? existing.filter(input => input.checked).map(input => input.value)
+                : [meId]);
             eventAssignees.replaceChildren();
             householdData.family.forEach(member => {
                 const label = document.createElement("label");
@@ -655,7 +682,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 checkbox.type = "checkbox";
                 checkbox.name = "eventAssignee";
                 checkbox.value = member.id;
-                checkbox.checked = member.id === meId;
+                checkbox.checked = selected.includes(member.id);
 
                 const avatar = document.createElement("span");
                 avatar.className = "cal-assignee-avatar";
@@ -679,7 +706,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         function closeEventForm() {
             addEventForm.reset();
-            renderEventAssignees();
+            renderEventAssignees([meId]);
             eventMessage.hidden = true;
             startTimeField.refresh();
             endTimeField.refresh();
@@ -1112,6 +1139,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             householdData.family = window.roomieCloud.members;
             renderEventAssignees();
             render();
+            if (openEventId && !editingEvent) renderDetail();
         });
 
         // --------------------------------
@@ -1339,6 +1367,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         let assignedTasks = [];
         let feedback = null;
         let loadError = "";
+        const responseDrafts = new Map();
+        const taskResponses = document.getElementById("taskResponses");
+        const taskResponsesSection = document.getElementById("taskResponsesSection");
 
         function memberId(member, index) {
             return member.id || `member-${index}`;
@@ -1376,7 +1407,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
-            return assignedNames.includes(householdData.user.name) || assignedNames.includes("Household");
+            return assignedNames.some(isMe) || assignedNames.includes("Household");
         }
 
         function taskAssignees(task) {
@@ -1389,7 +1420,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             return assigneesById.length
                 ? assigneesById
                 : assignedNames
-                    .map(name => familyMembers.find(person => person.name === name))
+                    .map(memberFor)
                     .filter(Boolean);
         }
 
@@ -1397,6 +1428,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             try {
                 await window.roomieCloud.updateTask(task.id, update);
                 loadError = "";
+                responseDrafts.delete(task.id);
                 if (showFeedback) {
                     feedback = { task: { ...task, ...update }, status: update.status };
                 }
@@ -1449,7 +1481,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             const avatar = document.createElement("span");
             avatar.className = "task-list-avatars";
             avatar.style.cssText = "display:flex;flex:0 0 auto;align-items:center;";
-            avatar.setAttribute("aria-label", `Assigned to ${assignedNames.join(", ")}`);
+            const assigneeNames = assignees.length ? assignees.map(member => member.name) : assignedNames.map(nameOf);
+            avatar.setAttribute("aria-label", `Assigned to ${assigneeNames.join(", ")}`);
             const avatarList = assignees.length
                 ? assignees.map(member => buildAvatar(member))
                 : [buildAvatar(null, assignedNames[0])];
@@ -1467,7 +1500,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             title.textContent = task.title;
             const meta = document.createElement("span");
             const due = displayDueDate(task).replace(/^Due /, "");
-            meta.textContent = `${task.assignedBy || "Household"} · ${due}`;
+            meta.textContent = `${nameOf(task.assignedById || task.assignedBy) || "Household"} · ${due}`;
             details.append(title, meta);
  
             if (options.allowCompletion && ["accepted", "completed"].includes(task.status)) {
@@ -1510,88 +1543,196 @@ document.addEventListener("DOMContentLoaded", async function () {
             title.textContent = task.title;
             const assignedBy = document.createElement("p");
             assignedBy.className = "task-assigned-by";
-            assignedBy.textContent = `Assigned by ${task.assignedBy || "Household"}`;
+            assignedBy.textContent = `Assigned by ${nameOf(task.assignedById || task.assignedBy) || "Household"}`;
             const due = document.createElement("p");
             due.className = "task-due";
             due.textContent = displayDueDate(task);
 
             const actions = document.createElement("div");
             actions.className = "task-request-actions";
-            [["Accept", "accept-task", "accepted"], ["Reject", "reject-task", "rejected"]]
-                .forEach(([label, className, status]) => {
+            const busy = Boolean(responseDrafts.get(task.id)?.busy);
+            [["Accept", "accept-task"], ["Reject", "reject-task"]]
+                .forEach(([label, className]) => {
                     const button = document.createElement("button");
                     button.className = `task-action-button ${className}`;
                     button.type = "button";
                     button.textContent = label;
-                    button.addEventListener("click", () => updateTask(task, { status }, true));
+                    button.disabled = busy;
+                    button.addEventListener("click", () => label === "Accept"
+                        ? updateTask(task, { status: "accepted" }, true)
+                        : openResponse("rejected"));
                     actions.append(button);
                 });
 
+            function openResponse(action) {
+                const previous = responseDrafts.get(task.id);
+                responseDrafts.set(task.id, {
+                    reason: previous?.reason || "",
+                    date: previous?.date ?? task.date ?? "",
+                    time: previous?.time ?? task.time ?? "",
+                    action, error: "", busy: false
+                });
+                renderTasks();
+                const field = document.getElementById(`response-reason-${task.id}`);
+                field?.focus();
+            }
             const rescheduleButton = document.createElement("button");
             rescheduleButton.className = "task-action-button reschedule-task";
             rescheduleButton.type = "button";
             rescheduleButton.textContent = "Reschedule";
-            rescheduleButton.addEventListener("click", () => {
-                if (card.querySelector(".reschedule-form")) {
-                    return;
-                }
-
-                const form = document.createElement("form");
-                form.className = "reschedule-form";
-                const dateInput = document.createElement("input");
-                dateInput.type = "date";
-                dateInput.setAttribute("aria-label", "New due date");
-                dateInput.required = true;
-                dateInput.value = task.date || "";
-                const timeInput = document.createElement("input");
-                timeInput.type = "time";
-                timeInput.setAttribute("aria-label", "New due time");
-                timeInput.value = task.time || "";
-                const saveButton = document.createElement("button");
-                saveButton.className = "task-action-button accept-task";
-                saveButton.type = "submit";
-                saveButton.textContent = "Save new time";
-                const cancelButton = document.createElement("button");
-                cancelButton.className = "task-action-button reject-task";
-                cancelButton.type = "button";
-                cancelButton.textContent = "Cancel";
-                cancelButton.addEventListener("click", () => form.remove());
-                form.append(dateInput, timeInput, saveButton, cancelButton);
-                form.addEventListener("submit", event => {
-                    event.preventDefault();
-                    updateTask(task, { date: dateInput.value, time: timeInput.value });
-                });
-                card.append(form);
-                dateInput.focus();
-            });
+            rescheduleButton.disabled = busy;
+            rescheduleButton.addEventListener("click", () => openResponse("rescheduled"));
 
             card.append(title, assignedBy, due, actions, rescheduleButton);
+            const draft = responseDrafts.get(task.id);
+            if (draft) card.append(createResponseForm(task, draft));
             return card;
+        }
+
+        function createResponseForm(task, draft) {
+            const form = document.createElement("form");
+            form.className = "task-response-form";
+            const rescheduling = draft.action === "rescheduled";
+            if (rescheduling) {
+                [["date", "New due date"], ["time", "New due time"]].forEach(([type, text]) => {
+                    const label = document.createElement("label");
+                    label.textContent = text;
+                    const input = document.createElement("input");
+                    input.type = type;
+                    input.id = `response-${type}-${task.id}`;
+                    input.value = draft[type];
+                    input.required = type === "date";
+                    input.disabled = draft.busy;
+                    input.addEventListener("input", () => { draft[type] = input.value; });
+                    label.append(input);
+                    form.append(label);
+                });
+            }
+            const reasonLabel = document.createElement("label");
+            reasonLabel.className = "task-response-reason";
+            reasonLabel.textContent = rescheduling ? "Why are you rescheduling?" : "Why are you rejecting this task?";
+            const reason = document.createElement("textarea");
+            reason.id = `response-reason-${task.id}`;
+            reason.required = true;
+            reason.maxLength = 1000;
+            reason.rows = 3;
+            reason.value = draft.reason;
+            reason.disabled = draft.busy;
+            reason.placeholder = "Explain your reason to the person who assigned this task.";
+            reason.addEventListener("input", () => { draft.reason = reason.value; });
+            reasonLabel.append(reason);
+            const help = document.createElement("p");
+            help.className = "form-help task-response-help";
+            help.textContent = `Your explanation will be sent to ${nameOf(task.assignedById || task.assignedBy) || "the person who assigned this task"} in Task responses.`;
+            const error = document.createElement("p");
+            error.className = "family-message task-response-error";
+            error.setAttribute("role", "alert");
+            error.hidden = !draft.error;
+            error.textContent = draft.error;
+            const send = document.createElement("button");
+            send.type = "submit";
+            send.className = "task-action-button accept-task";
+            send.textContent = draft.busy ? "Sending…" : rescheduling ? "Save new time" : "Send rejection";
+            send.disabled = draft.busy;
+            const cancel = document.createElement("button");
+            cancel.type = "button";
+            cancel.className = "task-action-button reject-task";
+            cancel.textContent = "Cancel";
+            cancel.disabled = draft.busy;
+            cancel.addEventListener("click", () => { responseDrafts.delete(task.id); renderTasks(); });
+            form.append(reasonLabel, help, error, send, cancel);
+            form.addEventListener("submit", async event => {
+                event.preventDefault();
+                if (draft.busy) return;
+                draft.reason = reason.value;
+                if (!draft.reason.trim() || draft.reason.trim().length > 1000) {
+                    draft.error = "Enter an explanation between 1 and 1000 characters.";
+                    error.textContent = draft.error;
+                    error.hidden = false;
+                    reason.focus();
+                    return;
+                }
+                draft.busy = true;
+                draft.error = "";
+                renderTasks();
+                try {
+                    const result = await window.roomieCloud.respondToTask(task.id, {
+                        action: draft.action, reason: draft.reason,
+                        ...(rescheduling ? { date: draft.date, time: draft.time } : {})
+                    });
+                    responseDrafts.delete(task.id);
+                    loadError = "";
+                    feedback = { task: { ...task, ...result }, status: draft.action, recipientId: result.recipientId };
+                } catch (error) {
+                    console.error("Could not send the task response.", error);
+                    draft.busy = false;
+                    draft.error = "Could not send your explanation. " + (error.code === "permission-denied"
+                        ? "Check your household access and try again."
+                        : error.message || "Please try again.");
+                    loadError = draft.error;
+                }
+                renderTasks();
+            });
+            return form;
+        }
+
+        function renderResponses(tasks) {
+            taskResponses.replaceChildren();
+            const notes = tasks.flatMap(task => Object.entries(task.responses || {})
+                .filter(([, note]) => note?.recipientId === meId && ["rejected", "rescheduled"].includes(note.action))
+                .map(([id, note]) => ({ ...note, id, task })));
+            const sentAt = note => note.createdAt?.toMillis?.() || (note.createdAt?.seconds || 0) * 1000;
+            notes.sort((a, b) => sentAt(b) - sentAt(a));
+            taskResponsesSection.hidden = notes.length === 0;
+            notes.forEach(note => {
+                const card = document.createElement("article");
+                card.className = "task-response-card";
+                const title = document.createElement("h3");
+                title.textContent = `${nameOf(note.senderId)} ${note.action === "rejected" ? "rejected" : "rescheduled"} “${note.task.title}”`;
+                const reason = document.createElement("p");
+                reason.className = "task-response-text";
+                reason.textContent = note.reason;
+                card.append(title, reason);
+                if (note.action === "rescheduled") {
+                    const schedule = document.createElement("p");
+                    schedule.className = "task-due";
+                    schedule.textContent = `New schedule: ${displayDueDate(note)}`;
+                    card.append(schedule);
+                }
+                taskResponses.append(card);
+            });
         }
 
         function renderFeedback() {
             const accepted = feedback.status === "accepted";
+            const rescheduled = feedback.status === "rescheduled";
             feedbackView.hidden = false;
             taskListView.hidden = true;
             document.body.classList.add("show-task-feedback");
             feedbackIcon.innerHTML = accepted
                 ? '<i class="fa-solid fa-check" aria-hidden="true"></i>'
+                : rescheduled ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i>'
                 : '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-            feedbackTitle.textContent = accepted ? "Task accepted!" : "Task declined";
+            feedbackTitle.textContent = accepted ? "Task accepted!" : rescheduled ? "Task rescheduled" : "Task declined";
             feedbackMessage.textContent = accepted
                 ? `${feedback.task.title} is now in Your Tasks.`
-                : `${feedback.task.title} was declined.`;
+                : `Your explanation was sent to ${nameOf(feedback.recipientId)} in Task responses.`;
             feedbackTaskCard.replaceChildren(createTaskSummary({
                 ...feedback.task,
-                status: accepted ? "accepted" : "rejected"
+                status: accepted ? "accepted" : rescheduled ? "requested" : "rejected"
             }, { showStatus: true }));
         }
 
         function renderTasks() {
+            const active = document.activeElement;
+            const restoreId = active?.id?.startsWith("response-") ? active.id : null;
+            const selection = restoreId && typeof active.selectionStart === "number"
+                ? [active.selectionStart, active.selectionEnd] : null;
             taskRequests.replaceChildren();
             yourTasksList.replaceChildren();
             allTasksList.replaceChildren();
             const tasks = allTasks();
+            renderResponses(tasks);
             const requests = tasks.filter(task =>
                 task.status === "requested" && isAssignedToCurrentUser(task)
             );
@@ -1627,6 +1768,11 @@ document.addEventListener("DOMContentLoaded", async function () {
             } else {
                 feedbackView.hidden = true;
                 taskListView.hidden = false;
+            }
+            const nextFocus = restoreId ? document.getElementById(restoreId) : null;
+            if (nextFocus && !nextFocus.disabled) {
+                nextFocus.focus({ preventScroll: true });
+                if (selection) nextFocus.setSelectionRange(...selection);
             }
         }
 
@@ -1692,6 +1838,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 await window.roomieCloud.addTask(title, assignedTo, newTaskDate.value, {
                     memberIds,
                     assignedBy: householdData.user.name,
+                    assignedById: meId,
                     date: newTaskDate.value,
                     time: newTaskTime.value,
                     status: "requested"
@@ -1759,10 +1906,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             });
         }
 
+        let nameDirty = false;
+        let savingName = false;
+        const saveNameButton = document.getElementById("saveNameButton");
+        nameInput.addEventListener("input", () => { nameDirty = true; });
         function renderName() {
-            if (document.activeElement !== nameInput) {
-                nameInput.value = memberFor(meId)?.name || householdData.user.name;
-            }
+            if (!nameDirty && !savingName) nameInput.value = householdData.user.name;
         }
 
         async function saveColor(color) {
@@ -1778,19 +1927,27 @@ document.addEventListener("DOMContentLoaded", async function () {
         nameForm.addEventListener("submit", async event => {
             event.preventDefault();
             const name = nameInput.value.trim();
-            if (!name) {
+            if (!name || name.length > 60) {
                 nameInput.focus();
-                showSettingsMessage("Enter a name.", true);
+                showSettingsMessage("Enter a name between 1 and 60 characters.", true);
                 return;
             }
 
+            if (savingName) return;
+            savingName = true;
+            saveNameButton.disabled = true;
+            settingsMessage.hidden = true;
             try {
                 await window.roomieCloud.updateProfile({ displayName: name });
-                householdData.user.name = name;
-                showSettingsMessage("Name saved.");
+                nameDirty = false;
+                showSettingsMessage("Name saved throughout Remind Roomie.");
             } catch (error) {
                 console.error("Could not save the name.", error);
                 showSettingsMessage("Could not save your name. Please try again.", true);
+            } finally {
+                savingName = false;
+                saveNameButton.disabled = false;
+                renderName();
             }
         });
 
