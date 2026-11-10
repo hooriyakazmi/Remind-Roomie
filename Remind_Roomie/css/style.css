@@ -495,7 +495,7 @@ button {
 
 .status.rejected {
     background-color: #c75959;
-    color: #000000;
+    color: #ffffff;
 }
 
 .status.overdue {
