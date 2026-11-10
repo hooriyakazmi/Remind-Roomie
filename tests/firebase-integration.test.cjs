@@ -152,7 +152,7 @@ test('invalid legacy data is rejected before writes', async () => {
 // Small DOM harness for behavior checks of the existing classic page script.
 class Element {
   constructor(tag = 'div') {
-    this.tag = tag; this.children = []; this.listeners = {}; this.style = {}; this.dataset = {};
+    this.tag = tag; this.children = []; this.listeners = {}; this.style = { setProperty() {} }; this.dataset = {};
     this.hidden = false; this.value = ''; this.classList = { add() {}, remove() {}, toggle() {} };
   }
   append(...items) { this.children.push(...items); }
@@ -188,6 +188,7 @@ async function loadPage(page, cloud, saved = storage(), options = {}) {
     querySelectorAll: () => []
   };
   const window = { roomieHouseholdReady: options.missingReady ? undefined : options.ready || Promise.resolve(), roomieCloud: cloud,
+    location: { search: options.search || '' },
     addEventListener: (type, fn) => listeners[type] = fn, scrollTo() {} };
   const householdData = {
     user: { name: 'Alice', initials: 'A' }, family: [{ id: 'alice', name: 'Alice' }], tasks: cloud?.tasks || [],
@@ -195,7 +196,8 @@ async function loadPage(page, cloud, saved = storage(), options = {}) {
   };
   const context = vm.createContext({
     window, document, householdData, localStorage: saved, console: options.console || console, setTimeout, clearTimeout,
-    Option: class extends Element { constructor(text, value) { super('option'); this.textContent = text; this.value = value; } }
+    Option: class extends Element { constructor(text, value) { super('option'); this.textContent = text; this.value = value; } },
+    URLSearchParams
   });
   vm.runInContext(fs.readFileSync(path.join(jsRoot, 'form-controls.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(jsRoot, 'script.js'), 'utf8'), context,
@@ -210,6 +212,11 @@ test('task page renders one card per cloud task and recognizes UID assignees', a
     tasks: [{ id: 'task', title: 'Trash', assignedTo: 'Old name', memberIds: ['alice'], status: 'requested', _remote: true }] };
   const page = await loadPage('tasks', cloud);
   assert.equal(page.elements.get('allTasks').children.length, 1);
+  assert.equal(page.elements.get('allTasks').hidden, true);
+  page.elements.get('toggleAllTasks').listeners.click();
+  assert.equal(page.elements.get('allTasks').hidden, false);
+  page.elements.get('toggleAllTasks').listeners.click();
+  assert.equal(page.elements.get('allTasks').hidden, true);
   assert.equal(page.elements.get('taskRequests').children[0].className, 'task-request-card');
   let update;
   cloud.updateTask = async (id, changes) => { update = { id, changes }; };
@@ -218,6 +225,20 @@ test('task page renders one card per cloud task and recognizes UID assignees', a
   await accept.listeners.click();
   assert.equal(update.id, 'task');
   assert.equal(update.changes.status, 'accepted');
+});
+
+test('task details can complete an accepted task assigned to the current user', async () => {
+  const task = { id: 'task', title: 'Trash', assignedTo: 'Alice', memberIds: ['alice'], status: 'accepted' };
+  const cloud = { user: { uid: 'alice' }, members: [{ id: 'alice', name: 'Alice' }], tasks: [task] };
+  const updates = [];
+  cloud.updateTask = async (id, changes) => updates.push({ id, changes });
+  const page = await loadPage('tasks', cloud, storage(), { search: '?task=task' });
+  assert.equal(page.elements.get('taskDetailView').hidden, false);
+  const completionButton = page.elements.get('taskDetailCard').children.at(-1);
+  assert.equal(completionButton.textContent, 'Mark as complete');
+  await completionButton.listeners.click();
+  assert.deepEqual(updates, [{ id: 'task', changes: { status: 'completed' } }]);
+  assert.equal(page.elements.get('taskDetailCard').children.at(-1).textContent, 'Mark as incomplete');
 });
 
 test('home progress responds to snapshots and account-scoped personal events', async () => {

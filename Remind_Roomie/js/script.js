@@ -1661,6 +1661,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const taskDetailCard = document.getElementById("taskDetailCard");
         const yourTasksList = document.getElementById("yourTasks");
         const allTasksList = document.getElementById("allTasks");
+        const toggleAllTasksButton = document.getElementById("toggleAllTasks");
         const pastTasksList = document.getElementById("pastTasks");
         const togglePastTasksButton = document.getElementById("togglePastTasks");
         const yourTasksSection = document.getElementById("yourTasksSection");
@@ -1682,6 +1683,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         let openTaskId = null;
         let requestedTaskId = new URLSearchParams(window.location.search).get("task");
         let loadError = "";
+        let allTasksExpanded = false;
         let pastTasksExpanded = false;
 
         function memberId(member, index) {
@@ -1740,8 +1742,15 @@ document.addEventListener("DOMContentLoaded", async function () {
             try {
                 await window.roomieCloud.updateTask(task.id, update);
                 loadError = "";
+                const updatedTask = {
+                    ...task,
+                    ...update,
+                    ...(update.status === "completed" ? { completed: true } : {}),
+                    ...(update.status === "accepted" ? { completed: false } : {})
+                };
+                assignedTasks = assignedTasks.map(item => item.id === task.id ? updatedTask : item);
                 if (showFeedback) {
-                    feedback = { task: { ...task, ...update }, status: update.status };
+                    feedback = { task: updatedTask, status: update.status };
                     openTaskId = null;
                 }
                 renderTasks();
@@ -1999,6 +2008,25 @@ document.addEventListener("DOMContentLoaded", async function () {
             );
             renderDetailRows(taskDetailCard, rows);
 
+            if (isAssignedToCurrentUser(task) && ["accepted", "completed"].includes(normalizedStatus)) {
+                const completionButton = document.createElement("button");
+                completionButton.type = "button";
+                completionButton.className = "task-action-button accept-task task-detail-completion";
+                completionButton.textContent = normalizedStatus === "completed" ? "Mark as incomplete" : "Mark as complete";
+                completionButton.addEventListener("click", () => {
+                    updateTask(task, { status: normalizedStatus === "completed" ? "accepted" : "completed" });
+                });
+                taskDetailCard.append(completionButton);
+            }
+
+            if (loadError) {
+                const errorNotice = document.createElement("p");
+                errorNotice.className = "family-message";
+                errorNotice.setAttribute("role", "alert");
+                errorNotice.textContent = loadError;
+                taskDetailCard.append(errorNotice);
+            }
+
             taskListView.hidden = true;
             taskDetailView.hidden = false;
             feedbackView.hidden = true;
@@ -2068,7 +2096,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
             pastTasksList.hidden = !pastTasksExpanded;
             togglePastTasksButton.setAttribute("aria-expanded", String(pastTasksExpanded));
-            togglePastTasksButton.textContent = pastTasksExpanded ? "Hide past tasks" : "Show past tasks";
+            allTasksList.hidden = !allTasksExpanded;
+            toggleAllTasksButton.setAttribute("aria-expanded", String(allTasksExpanded));
 
             if (loadError) {
                 const errorNotice = document.createElement("p");
@@ -2132,7 +2161,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             pastTasksExpanded = !pastTasksExpanded;
             pastTasksList.hidden = !pastTasksExpanded;
             togglePastTasksButton.setAttribute("aria-expanded", String(pastTasksExpanded));
-            togglePastTasksButton.textContent = pastTasksExpanded ? "Hide past tasks" : "Show past tasks";
+        });
+
+        toggleAllTasksButton.addEventListener("click", () => {
+            allTasksExpanded = !allTasksExpanded;
+            allTasksList.hidden = !allTasksExpanded;
+            toggleAllTasksButton.setAttribute("aria-expanded", String(allTasksExpanded));
         });
 
         addTaskForm.addEventListener("submit", async event => {

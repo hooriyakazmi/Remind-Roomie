@@ -388,6 +388,39 @@ button {
     font-weight: 700;
 }
 
+.task-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.task-section-toggle::after {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    content: "";
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 160ms ease;
+}
+
+.task-section-toggle[aria-expanded="true"]::after {
+    transform: translateY(2px) rotate(225deg);
+}
+
+.task-section-toggle:focus-visible {
+    outline: 2px solid #337c6e;
+    outline-offset: 4px;
+    border-radius: 2px;
+}
+
 .section-heading a {
     text-decoration: none;
     color: #17675b;
@@ -515,6 +548,11 @@ button {
 .accept-task {
     background-color: #17675b;
     color: white;
+}
+
+.task-detail-completion {
+    width: 100%;
+    margin-top: 12px;
 }
 
 .reject-task {
