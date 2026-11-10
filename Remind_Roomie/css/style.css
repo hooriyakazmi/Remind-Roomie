@@ -2063,3 +2063,76 @@ button {
 .auth-message {
     margin-bottom: 12px;
 }
+
+/* INVITATION CODE POPUP */
+
+.invitation-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    padding: 20px;
+    display: grid;
+    place-items: center;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.invitation-popup[hidden] {
+    display: none;
+}
+
+.invitation-popup-content {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    padding: 24px;
+    border-radius: 20px;
+    background-color: white;
+    box-shadow: 0 8px 26px rgb(23 103 91 / 12%);
+    display: grid;
+    gap: 12px;
+}
+
+.invitation-popup-content h3 {
+    color: #17675b;
+    font-size: 19px;
+}
+
+.invitation-popup-content p {
+    color: #6a6969;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.invitation-popup-content label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.invitation-popup-content input {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background: #fbfcfb;
+    font: inherit;
+}
+
+.invitation-popup-content input:focus {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.invitation-popup-content .primary-button {
+    margin-top: 5px;
+}
+
+.popup-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    border: none;
+    background: transparent;
+    color: #17675b;
+    font-size: 25px;
+}
