@@ -9,7 +9,7 @@ async function taskBackend(context) {
     calls++;
     if (fail) throw new Error('Connection lost.');
     const note = { ...response, reason: response.reason.trim(), senderId, recipientId: 'alice', createdAt: { seconds: calls }, previousDate: task.date, previousTime: task.time };
-    if (response.action === 'rejected') task.status = 'rejected';
+    if (response.action === 'rejected' || response.action === 'accepted') task.status = response.action;
     else { task.date = response.date; task.time = response.time; }
     task.responses['response-' + calls] = note;
     return { ...note, status: task.status };
@@ -49,6 +49,23 @@ async function openTaskPage(page, actor = 'bob') {
   await page.goto('/tasks.html?as=' + actor);
   await expect.poll(() => page.evaluate(() => window.roomieAppState)).toBe('ready');
 }
+
+test('accepting requires an explanation and delivers it to the assigner', async ({ context, page }) => {
+  const backend = await taskBackend(context);
+  const assigner = await context.newPage();
+  await openTaskPage(assigner, 'alice');
+  await openTaskPage(page);
+  await page.getByRole('button', { name:'Accept', exact:true }).click();
+  const reason = page.getByLabel('Why are you accepting this task?');
+  await expect(reason).toBeVisible();
+  await reason.fill('I can take care of it.');
+  await page.getByRole('button', { name:'Send acceptance' }).click();
+  await expect(page.locator('#taskFeedbackTitle')).toHaveText('Task accepted!');
+  await expect(page.locator('#taskFeedbackMessage')).toContainText('sent to Alice');
+  await expect(assigner.locator('#taskResponses')).toContainText('Bob accepted “Wash dishes”');
+  await expect(assigner.locator('#taskResponses .task-response-text')).toHaveText('I can take care of it.');
+  expect(backend.task.status).toBe('accepted');
+});
 
 // Browser checks use a mock delivery service. Actual atomic Firestore writes and
 // cross-household access are covered by the emulator tests.

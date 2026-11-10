@@ -1,9 +1,57 @@
 
 /* GENERAL STYLES */
+:root {
+    --roomie-card-radius: 16px;
+    --roomie-card-background: #ffffff;
+    --roomie-card-border: 1px solid #e1e5e3;
+    --roomie-task-card-padding: 10px 12px;
+    --roomie-task-card-gap: 9px;
+    --roomie-event-time-color: #17675b;
+    --roomie-profile-color-fallback: #f7dafa;
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+.roomie-card {
+    border-radius: var(--roomie-card-radius);
+}
+
+.roomie-person-card {
+    background-color: var(--member-card-color, var(--roomie-card-background));
+}
+
+.roomie-event-card,
+.roomie-task-card {
+    min-height: 56px;
+    padding: var(--roomie-task-card-padding);
+    border: var(--roomie-card-border);
+    gap: var(--roomie-task-card-gap);
+}
+
+.roomie-person-avatar {
+    background-color: var(--member-profile-color, var(--roomie-profile-color-fallback));
+    border-radius: 50%;
+}
+
+#homeEvents .event-details .roomie-due-date,
+#homeTasks .event-details .roomie-due-date,
+.cal-event-details .roomie-due-date,
+.task-list-details .roomie-due-date,
+.task-request-card .roomie-due-date,
+.cal-event-time {
+    color: var(--roomie-event-time-color);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.item-attribution {
+    color: #777;
+    font-size: 11px;
+    line-height: 1.3;
 }
 
 body {
@@ -232,11 +280,26 @@ button {
     flex: 1 1 180px;
     max-width: 100%;
     min-height: 64px;
-    border-radius: 16px;
-    padding: 12px 14px;
     display: flex;
     align-items: center;
-    gap: 12px;
+}
+
+#homeEvents .roomie-event-card,
+#homeTasks .roomie-task-card {
+    width: 100%;
+}
+
+#homeTasks .event-details h4 {
+    font-size: 13px;
+    margin-bottom: 0;
+}
+
+#homeTasks .event-details p {
+    font-size: 10px;
+}
+
+#homeTasks .event-details p.item-attribution {
+    font-size: 11px;
 }
 
 #homeEvents .event-details,
@@ -259,7 +322,7 @@ button {
     width: 40px;
     height: 40px;
     min-width: 40px;
-    background-color: #da8bdc;
+    background-color: var(--member-profile-color, #da8bdc);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -325,6 +388,39 @@ button {
     font-weight: 700;
 }
 
+.task-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.task-section-toggle::after {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    content: "";
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 160ms ease;
+}
+
+.task-section-toggle[aria-expanded="true"]::after {
+    transform: translateY(2px) rotate(225deg);
+}
+
+.task-section-toggle:focus-visible {
+    outline: 2px solid #337c6e;
+    outline-offset: 4px;
+    border-radius: 2px;
+}
+
 .section-heading a {
     text-decoration: none;
     color: #17675b;
@@ -336,9 +432,9 @@ button {
 ============================== */
 
 .task-card {
-    background-color: white;
+    background-color: var(--member-card-color, var(--roomie-card-background));
     padding: 15px;
-    border-radius: 15px;
+    border-radius: var(--roomie-card-radius);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -350,7 +446,7 @@ button {
     height: 39px;
     min-width: 39px;
     border-radius: 50%;
-    background-color: #e7d9f5;
+    background-color: var(--member-profile-color, #e7d9f5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -383,23 +479,28 @@ button {
 }
 
 .status.pending {
-    background-color: #fff0cc;
-    color: #956a19;
+    background-color: #E5E4AE;
+    color: #000000;
 }
 
 .status.completed {
-    background-color: #d5eee2;
-    color: #316c56;
+    background-color: #C4D8A7;
+    color: #000000;
 }
 
 .status.accepted {
-    background-color: #d5eee2;
-    color: #316c56;
+    background-color: #c4ded1;
+    color: #000000;
 }
 
 .status.rejected {
-    background-color: #eeeeee;
-    color: #666666;
+    background-color: #c75959;
+    color: #000000;
+}
+
+.status.overdue {
+    background-color: #FFAFB0;
+    color: #000000;
 }
 
 .task-notifications,
@@ -409,10 +510,8 @@ button {
 
 .task-request-card {
     margin-bottom: 8px;
-    padding: 10px 12px;
-    border: 1px solid #e1e5e3;
-    border-radius: 12px;
-    background-color: white;
+    border-radius: var(--roomie-card-radius);
+    background-color: var(--member-card-color, var(--roomie-card-background));
 }
 
 .task-request-title {
@@ -425,8 +524,7 @@ button {
     font-size: 12px;
 }
 
-.task-due {
-    color: #777;
+.task-assigned-by.item-attribution {
     font-size: 11px;
 }
 
@@ -436,6 +534,45 @@ button {
     gap: 6px;
     margin-top: 8px;
 }
+
+.task-response-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.task-response-form label {
+    display: grid;
+    gap: 5px;
+    font-size: 13px;
+}
+
+.task-response-form input,
+.task-response-form textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background: #fbfcfb;
+    font: inherit;
+}
+
+.task-response-form textarea { resize: vertical; }
+.task-response-reason,
+.task-response-help,
+.task-response-error { grid-column: 1 / -1; }
+.task-response-card {
+    margin: 10px 0;
+    padding: 14px;
+    border: 1px solid #d6ddda;
+    border-radius: 12px;
+    background: white;
+}
+.task-response-card h3 { font-size: 14px; margin-bottom: 8px; }
+.task-response-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.task-response-card .task-due { margin-top: 8px; }
 
 .task-action-button {
     min-height: 32px;
@@ -452,6 +589,11 @@ button {
     color: white;
 }
 
+.task-detail-completion {
+    width: 100%;
+    margin-top: 12px;
+}
+
 .reject-task {
     background-color: white;
     color: #17675b;
@@ -462,10 +604,6 @@ button {
     margin-top: 6px;
     background-color: #e5f1ee;
     color: #17675b;
-}
-
-.task-history .task-request-card {
-    padding: 13px 15px;
 }
 
 .task-history .task-request-title {
@@ -479,28 +617,25 @@ button {
 
 .task-history .status.requested {
     background-color: #fff0cc;
-    color: #956a19;
+    color: #000000;
 }
 
 .task-list-card {
     min-height: 56px;
     margin-bottom: 9px;
-    padding: 9px 11px;
-    border: 1px solid #e1e5e3;
-    border-radius: 11px;
-    background-color: white;
+    border-radius: var(--roomie-card-radius);
+    background-color: var(--member-card-color, var(--roomie-card-background));
     display: flex;
     align-items: center;
-    gap: 9px;
 }
 
 .task-list-avatar {
     width: 30px;
     height: 30px;
     flex: 0 0 30px;
-    border: 1px solid #d6ddda;
+    border: 0;
     border-radius: 50%;
-    background-color: #e5f1ee;
+    background-color: var(--member-profile-color, #e5f1ee);
     display: grid;
     place-items: center;
     color: #17675b;
@@ -527,6 +662,10 @@ button {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 10px;
+}
+
+.task-list-details span.item-attribution {
+    font-size: 11px;
 }
 
 .task-list-card.completed .task-list-details strong {
@@ -659,22 +798,19 @@ button {
 ============================== */
 
 #calendarEvents .event-card {
-    background-color: white;
+    background-color: var(--member-card-color, var(--roomie-card-background));
     width: 100%;
-    min-height: 65px;
-    border-radius: 15px;
-    padding: 14px;
+    border-radius: var(--roomie-card-radius);
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 9px;
 }
 
 #calendarEvents .event-avatar {
     width: 38px;
     height: 38px;
     min-width: 38px;
-    background-color: #f7dafa;
+    background-color: var(--member-profile-color, var(--roomie-profile-color-fallback));
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -725,14 +861,14 @@ button {
 }
 
 #familyList .task-card {
-    background-color: white;
+    background-color: var(--member-card-color, var(--roomie-card-background));
     padding: 15px;
-    border-radius: 15px;
+    border-radius: var(--roomie-card-radius);
     margin-bottom: 12px;
 }
 
 #familyList .task-avatar {
-    background-color: #e7d9f5;
+    background-color: var(--member-profile-color, #e7d9f5);
     overflow: hidden;
 }
 
@@ -1242,14 +1378,32 @@ button {
 
 .cal-event {
     position: relative;
-    min-height: 64px;
-    margin-bottom: 10px;
-    padding: 12px 14px;
-    border-radius: 16px;
-    background-color: #f7dafa;
+    margin-bottom: 9px;
+    border-radius: var(--roomie-card-radius);
+    background-color: var(--member-card-color, var(--roomie-profile-color-fallback));
     display: flex;
     align-items: center;
-    gap: 12px;
+}
+
+.cal-event-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.cal-event-row .cal-event {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.cal-family-marker {
+    width: 16px;
+    flex: 0 0 16px;
+    text-align: center;
+    color: #17675b;
+    font-size: 12px;
 }
 
 .cal-family-icon {
@@ -1262,25 +1416,43 @@ button {
 }
 
 .cal-event.shared {
-    background-color: #e5f1ee;
+    background-color: var(--member-card-color, #e5f1ee);
+}
+
+.home-event-avatars {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.home-event-avatars .event-avatar {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    font-size: 13px;
+    color: #080808;
+}
+
+.cal-event-avatars {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
 }
 
 .cal-event-avatar {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
     border-radius: 50%;
+    background-color: var(--member-profile-color, var(--roomie-profile-color-fallback));
     display: grid;
     place-items: center;
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 13px;
+    color: #080808;
 }
 
 .cal-event-time {
     min-width: 62px;
-    font-size: 12px;
-    font-weight: 700;
-    color: #17675b;
     text-align: right;
     white-space: pre-line;
 }
@@ -1291,12 +1463,12 @@ button {
 }
 
 .cal-event-details h4 {
-    font-size: 14px;
-    margin-bottom: 3px;
+    font-size: 13px;
+    margin-bottom: 0;
 }
 
 .cal-event-details p {
-    font-size: 11px;
+    font-size: 10px;
     color: #6a6969;
 }
 
@@ -1324,8 +1496,8 @@ button {
 .cal-detail-hero {
     padding: 20px;
     margin-bottom: 24px;
-    border-radius: 20px;
-    background-color: #fbe0fb;
+    border-radius: var(--roomie-card-radius);
+    background-color: var(--member-card-color, #fbe0fb);
 }
 
 .cal-hero-top {
@@ -1638,8 +1810,8 @@ button {
 
 .color-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 8px;
     margin-top: 12px;
 }
 
@@ -1660,8 +1832,67 @@ button {
     cursor: not-allowed;
 }
 
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.settings-toggle-row h2 {
+    margin-bottom: 4px;
+}
+
+.switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 50px;
+    height: 30px;
+}
+
+.switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 15px;
+    background-color: #d6ddda;
+    transition: background-color 0.2s;
+}
+
+.switch-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s;
+}
+
+.switch input:checked + .switch-track {
+    background-color: #17675b;
+}
+
+.switch input:checked + .switch-track::after {
+    transform: translateX(20px);
+}
+
+.switch input:focus-visible + .switch-track {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
 .settings-message {
-    margin-top: 4px;
+    margin-top: 8px;
     font-size: 13px;
     color: #317a5f;
 }
@@ -1747,8 +1978,8 @@ button {
 .account-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: min(100% - 32px, 430px);
+    justify-content: center;
+    width: 100%;
     margin: 0 auto 14px;
     padding: 10px 14px;
     border-radius: 12px;
@@ -1764,6 +1995,12 @@ button {
     color: #17675b;
     font: inherit;
     font-weight: 700;
+}
+
+#signOutButton {
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #800000;
 }
 
 .app-status {
@@ -1866,40 +2103,75 @@ button {
     margin-bottom: 12px;
 }
 
+/* INVITATION CODE POPUP */
 
-/* Explanations sent back to task assigners. */
-.task-response-form {
+.invitation-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    padding: 20px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 12px;
+    place-items: center;
+    background-color: rgba(0, 0, 0, 0.4);
 }
-.task-response-form label {
-    display: grid;
-    gap: 5px;
-    font-size: 13px;
+
+.invitation-popup[hidden] {
+    display: none;
 }
-.task-response-form input,
-.task-response-form textarea {
+
+.invitation-popup-content {
+    position: relative;
     width: 100%;
-    min-width: 0;
-    padding: 9px;
+    max-width: 340px;
+    padding: 24px;
+    border-radius: 20px;
+    background-color: white;
+    box-shadow: 0 8px 26px rgb(23 103 91 / 12%);
+    display: grid;
+    gap: 12px;
+}
+
+.invitation-popup-content h3 {
+    color: #17675b;
+    font-size: 19px;
+}
+
+.invitation-popup-content p {
+    color: #6a6969;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.invitation-popup-content label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.invitation-popup-content input {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
     border: 1px solid #d6ddda;
     border-radius: 9px;
     background: #fbfcfb;
     font: inherit;
 }
-.task-response-form textarea { resize: vertical; }
-.task-response-reason,
-.task-response-help,
-.task-response-error { grid-column: 1 / -1; }
-.task-response-card {
-    margin: 10px 0;
-    padding: 14px;
-    border: 1px solid #d6ddda;
-    border-radius: 12px;
-    background: white;
+
+.invitation-popup-content input:focus {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
 }
-.task-response-card h3 { font-size: 14px; margin-bottom: 8px; }
-.task-response-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
-.task-response-card .task-due { margin-top: 8px; }
+
+.invitation-popup-content .primary-button {
+    margin-top: 5px;
+}
+
+.popup-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    border: none;
+    background: transparent;
+    color: #17675b;
+    font-size: 25px;
+}

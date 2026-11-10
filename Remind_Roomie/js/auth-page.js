@@ -128,12 +128,44 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  const invitationPopup = document.getElementById("invitationPopup");
+  const invitationCode = document.getElementById("invitationCode");
+
+  document.getElementById("openInvitationPopup").addEventListener("click", () => {
+    invitationPopup.hidden = false;
+    invitationCode.focus();
+  });
+
+  document.getElementById("closeInvitationPopup").addEventListener("click", () => {
+    invitationPopup.hidden = true;
+  });
+
+  document.getElementById("confirmInvitationCode").addEventListener("click", () => {
+    if (!invitationCode.value.trim()) {
+      invitationCode.focus();
+      return;
+    }
+
+    invitationPopup.hidden = true;
+  });
+
+  invitationPopup.addEventListener("click", event => {
+    if (event.target === invitationPopup) {
+      invitationPopup.hidden = true;
+    }
+  });
+
   document.getElementById("joinHouseholdForm").addEventListener("submit", async event => {
     event.preventDefault();
     message.hidden = true;
     try {
       const householdId = document.getElementById("joinHouseholdId").value.trim();
       const code = document.getElementById("invitationCode").value.trim();
+      if (!code) {
+        invitationPopup.hidden = false;
+        invitationCode.focus();
+        return;
+      }
       await joinHousehold(householdId, code, currentUser);
       window.location.replace("index.html");
     } catch (error) {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Account</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-task-responses-4">
+    <link rel="stylesheet" href="css/style.css?v=20261108-addbtn-1">
 </head>
 <body class="auth-page">
     <main class="auth-container">
@@ -53,12 +53,35 @@
 
             <form id="joinHouseholdForm" class="auth-form">
                 <h3>Join a household</h3>
+
                 <label for="joinHouseholdId">Household ID</label>
                 <input id="joinHouseholdId" type="text" autocomplete="off" required>
-                <label for="invitationCode">Invitation code</label>
-                <input id="invitationCode" type="text" autocomplete="off" required>
-                <button class="primary-button" type="submit">Join household</button>
-            </form>
+
+
+                <button class="secondary-button" id="openInvitationPopup" type="button">
+                Enter Invitation Code
+                </button>
+
+                <div id="invitationPopup" class="invitation-popup" hidden>
+                <div class="invitation-popup-content">
+                    <button type="button" id="closeInvitationPopup" class="popup-close">
+                        &times;
+                    </button>
+
+                    <h3>Enter Invitation Code</h3>
+                    <p>Enter the code shared by your roommate.</p>
+
+                    <label for="invitationCode">Invitation Code</label>
+                    <input id="invitationCode" type="text" autocomplete="off">
+
+                    <button type="button" id="confirmInvitationCode" class="primary-button">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+
+    <button class="primary-button" type="submit">Join household</button>
+</form>
 
             <button class="auth-switch" id="authSignOut" type="button">Sign out</button>
         </section>

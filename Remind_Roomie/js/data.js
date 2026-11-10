@@ -6,10 +6,10 @@ const householdData = {
         { color: "#B9C8FC", secondary: "#D9E2FF" },
         { color: "#90cdd8", secondary: "#CDE7EC" },
         { color: "#E8C2E8", secondary: "#FBE0FB" },
-        { color: "#E8A6A7", secondary: "#F3C4C5" },
+        { color: "#E8A6A7", secondary: "#f5cccc" },
         { color: "#EDED97", secondary: "#FBFFD0" },
-        { color: "#FAD5B0", secondary: "#FFE2BF" },
-        { color: "#8da9aecb", secondary: "#d3dbde" }
+        { color: "#FAD5B0", secondary: "#faebd9" },
+        { color: "#aac9d1", secondary: "#d6dfe1" }
     ],
 
     user: {

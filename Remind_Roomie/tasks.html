@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Tasks</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-task-responses-4">
+    <link rel="stylesheet" href="css/style.css?v=20261110-task-responses-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -43,7 +43,11 @@
 
             <section class="task-history">
                 <div class="section-heading">
-                    <h2>All Tasks</h2>
+                    <h2>
+                        <button class="task-section-toggle" id="toggleAllTasks" type="button" aria-expanded="false" aria-controls="allTasks">
+                            All Tasks
+                        </button>
+                    </h2>
                     <button class="add-member-trigger" id="openAddTask" type="button" aria-expanded="false" aria-controls="addTaskForm">
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                         Assign task
@@ -78,9 +82,33 @@
                     </div>
                 </form>
 
-                <div id="allTasks" aria-live="polite"></div>
+                <div id="allTasks" aria-live="polite" hidden></div>
+            </section>
+
+            <section class="task-history">
+                <div class="section-heading">
+                    <h2>
+                        <button class="task-section-toggle" id="togglePastTasks" type="button" aria-expanded="false" aria-controls="pastTasks">
+                            Past Tasks
+                        </button>
+                    </h2>
+                </div>
+                <div id="pastTasks" aria-live="polite" hidden></div>
             </section>
         </div>
+
+        <section id="taskDetailView" hidden>
+            <div class="cal-detail-top">
+                <button type="button" class="cal-nav-button" id="backFromTaskDetails" aria-label="Back to tasks">
+                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                </button>
+                <h1 class="cal-detail-title">Tasks</h1>
+            </div>
+
+            <div class="cal-detail-hero" id="taskDetailHero"></div>
+            <h2 class="cal-detail-heading">Task details</h2>
+            <div class="cal-form-card" id="taskDetailCard"></div>
+        </section>
 
         <section class="task-feedback" id="taskFeedback" aria-live="polite" hidden>
             <div class="task-feedback-icon" id="taskFeedbackIcon" aria-hidden="true"></div>
@@ -92,10 +120,6 @@
 
     </main>
 
-    <div class="account-bar">
-        <span>Signed in as <strong id="accountName"></strong></span>
-        <button id="signOutButton" type="button">Sign out</button>
-    </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
@@ -127,9 +151,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-profile-3"></script>
-    <script src="js/data.js?v=20261108-controls-2"></script>
-    <script src="js/script.js?v=20261108-task-responses-4"></script>
+    <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
+    <script src="js/data.js?v=20261108-addbtn-1"></script>
+    <script src="js/script.js?v=20261110-task-responses-1"></script>
 
 </body>
 </html>

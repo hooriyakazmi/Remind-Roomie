@@ -72,6 +72,9 @@ for (const item of cases) {
       await page.locator(item.field).fill('Wash dishes');
       await page.locator(item.form).getByRole('button', {name:'Assign task'}).click();
       await expect(page.locator(item.form)).toBeHidden();
+      await expect(page.locator('#allTasks')).toBeHidden();
+      await page.locator('#toggleAllTasks').click();
+      await expect(page.locator('#allTasks')).toBeVisible();
       await expect(page.locator('#allTasks')).toContainText('Wash dishes');
       await expect(page.locator('#allTasks .task-list-card')).toHaveCount(1);
     } else {

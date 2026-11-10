@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Calendar</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-task-responses-4">
+    <link rel="stylesheet" href="css/style.css?v=20261109-past-events-dropdown-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -61,6 +61,10 @@
         <section>
             <div class="section-heading">
                 <h2 id="selectedDayTitle"></h2>
+                <button class="add-member-trigger" id="addEventButton" type="button" aria-expanded="false">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    Add event
+                </button>
             </div>
 
             <div id="dayEvents">
@@ -77,6 +81,17 @@
             <div id="weekEvents">
                 <!-- Events are added using JavaScript -->
             </div>
+        </section>
+
+        <section class="task-history">
+            <div class="section-heading">
+                <h2>
+                    <button class="task-section-toggle" id="togglePastEvents" type="button" aria-expanded="false" aria-controls="pastEvents">
+                        Past Events
+                    </button>
+                </h2>
+            </div>
+            <div id="pastEvents" aria-live="polite" hidden></div>
         </section>
 
         </div>
@@ -192,6 +207,11 @@
                         <label for="editDescription">Description</label>
                         <textarea id="editDescription" rows="3"></textarea>
                     </div>
+
+                    <div class="cal-form-row">
+                        <span class="task-form-label" id="editAssigneesLabel">Assign to</span>
+                        <div class="task-assignee-options" id="editAssignees" role="group" aria-labelledby="editAssigneesLabel"></div>
+                    </div>
                 </div>
 
                 <p class="family-message" id="editMessage" hidden></p>
@@ -224,17 +244,7 @@
         </div>
     </div>
 
-    <!-- Add Event Button -->
-    <div class="cal-fab-wrap">
-        <button class="cal-add-button" id="addEventButton" aria-label="Add event" aria-expanded="false">
-            <i class="fa-solid fa-plus"></i>
-        </button>
-    </div>
 
-    <div class="account-bar">
-        <span>Signed in as <strong id="accountName"></strong></span>
-        <button id="signOutButton" type="button">Sign out</button>
-    </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav">
@@ -266,9 +276,9 @@
 
     </nav>
 
-    <script src="js/form-controls.js?v=20261108-profile-3"></script>
-    <script src="js/data.js?v=20261108-controls-2"></script>
-    <script src="js/script.js?v=20261108-task-responses-4"></script>
+    <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
+    <script src="js/data.js?v=20261108-addbtn-1"></script>
+    <script src="js/script.js?v=20261109-past-events-dropdown-1"></script>
 
 </body>
 </html>

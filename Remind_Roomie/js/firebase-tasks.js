@@ -67,7 +67,7 @@ export async function setTaskCompleted(householdId, taskId, completed) {
 // the response through the same task subscription used by the existing pages.
 export async function respondToTask(householdId, taskId, user, members, response) {
   const reason = typeof response.reason === "string" ? response.reason.trim() : "";
-  if (!["rejected", "rescheduled"].includes(response.action)) throw new Error("Choose a valid task response.");
+  if (!["accepted", "rejected", "rescheduled"].includes(response.action)) throw new Error("Choose a valid task response.");
   if (!reason || reason.length > 1000) throw new Error("Enter an explanation between 1 and 1000 characters.");
   if (response.action === "rescheduled") {
     const date = response.date || "";
@@ -115,7 +115,9 @@ export async function respondToTask(householdId, taskId, user, members, response
     };
     const changes = response.action === "rejected"
       ? { status: "rejected", completed: false }
-      : { date: note.date, dueDate: note.date, time: note.time, dueTime: note.time };
+      : response.action === "accepted"
+        ? { status: "accepted", completed: false }
+        : { date: note.date, dueDate: note.date, time: note.time, dueTime: note.time };
     transaction.update(ref, {
       ...changes,
       assignedById: recipientId,
