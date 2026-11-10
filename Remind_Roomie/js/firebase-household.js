@@ -6,6 +6,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -13,7 +14,7 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 import { createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
-import { addTask, listenToTasks, updateTask } from "./firebase-tasks.js";
+import { addTask, listenToTasks, updateTask, respondToTask } from "./firebase-tasks.js";
 
 // Create the required profile only after Firebase Authentication creates the account.
 export async function signUp(email, password, displayName) {
@@ -78,12 +79,35 @@ export async function joinHousehold(householdId, code, user) {
   await batch.commit();
 }
 
-// Save the signed-in user's own name and/or color. Other members' profiles stay read-only.
+// Firestore is the app's source of truth. Keep former names for records created
+// before account IDs were stored, without rewriting anyone else's shared events.
 export async function updateMyProfile(user, changes) {
-  if (changes.displayName) {
-    await updateProfile(user, { displayName: changes.displayName });
+  const next = { ...changes };
+  if (Object.hasOwn(next, "displayName")) {
+    if (typeof next.displayName !== "string" || !next.displayName.trim() || next.displayName.trim().length > 60) {
+      throw new Error("Enter a name between 1 and 60 characters.");
+    }
+    next.displayName = next.displayName.trim();
+    await runTransaction(db, async transaction => {
+      const ref = doc(db, "users", user.uid);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) throw new Error("Your account profile could not be found.");
+      const profile = snapshot.data();
+      const update = { ...next };
+      if (profile.displayName !== next.displayName) {
+        update.previousNames = [...(profile.previousNames || []), profile.displayName];
+      }
+      transaction.update(ref, update);
+    });
+    // A separate Auth failure must not undo or misreport a saved Firestore name.
+    try {
+      await updateProfile(user, { displayName: next.displayName });
+    } catch (error) {
+      console.warn("Name saved; Firebase Auth profile will synchronize on the next page load.", error);
+    }
+  } else {
+    await updateDoc(doc(db, "users", user.uid), next);
   }
-  await updateDoc(doc(db, "users", user.uid), changes);
 }
 
 // Each member's color: their saved color, or a default from the palette. Members without
@@ -164,8 +188,9 @@ export function createHouseholdCloud(householdId, user, onError) {
   const cloud = { householdId, user, tasks: [], events: [], members: [], reportError: onError };
   cloud.createInvitation = email => createHouseholdInvitation(householdId, email);
   cloud.addTask = (title, assignedTo, dueDate, details) =>
-    addTask(householdId, title, assignedTo, dueDate, details);
+    addTask(householdId, title, assignedTo, dueDate, { ...details, assignedById: user.uid });
   cloud.updateTask = (taskId, changes) => updateTask(householdId, taskId, changes);
+  cloud.respondToTask = (taskId, response) => respondToTask(householdId, taskId, user, cloud.members, response);
   cloud.addEvent = event => addHouseholdEvent(householdId, event);
   cloud.updateEvent = (eventId, changes) => updateHouseholdEvent(householdId, eventId, changes);
   cloud.deleteEvent = eventId => deleteHouseholdEvent(householdId, eventId);
@@ -205,6 +230,7 @@ export function createHouseholdCloud(householdId, user, onError) {
         return {
           id: member.id,
           name,
+          previousNames: member.previousNames || [],
           role: member.id === user.uid ? "You" : "Roommate",
           initials: name.charAt(0).toUpperCase(),
           color,
@@ -213,6 +239,14 @@ export function createHouseholdCloud(householdId, user, onError) {
       });
       cloud.markMembersReady();
       window.householdData.family = cloud.members;
+      const me = cloud.members.find(member => member.id === user.uid);
+      if (me) {
+        window.householdData.user = {
+          ...window.householdData.user,
+          name: me.name,
+          initials: me.initials
+        };
+      }
       window.dispatchEvent(new CustomEvent("roomie:members-updated"));
     }, error => {
       // Release waiting pages even if the member list fails, so they can show the error

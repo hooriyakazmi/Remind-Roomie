@@ -535,6 +535,45 @@ button {
     margin-top: 8px;
 }
 
+.task-response-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.task-response-form label {
+    display: grid;
+    gap: 5px;
+    font-size: 13px;
+}
+
+.task-response-form input,
+.task-response-form textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #d6ddda;
+    border-radius: 9px;
+    background: #fbfcfb;
+    font: inherit;
+}
+
+.task-response-form textarea { resize: vertical; }
+.task-response-reason,
+.task-response-help,
+.task-response-error { grid-column: 1 / -1; }
+.task-response-card {
+    margin: 10px 0;
+    padding: 14px;
+    border: 1px solid #d6ddda;
+    border-radius: 12px;
+    background: white;
+}
+.task-response-card h3 { font-size: 14px; margin-bottom: 8px; }
+.task-response-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.task-response-card .task-due { margin-top: 8px; }
+
 .task-action-button {
     min-height: 32px;
     padding: 5px 10px;

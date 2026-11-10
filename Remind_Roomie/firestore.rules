@@ -26,12 +26,22 @@ service cloud.firestore {
 
     function profileHasRequiredFields(data) {
       return data.keys().hasAll(['email', 'displayName', 'householdId'])
-        && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId', 'color'])
+        && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId', 'color', 'previousNames'])
         && data.email == request.auth.token.email
         && data.displayName is string
         && data.displayName.size() > 0
         && (data.householdId == null || data.householdId is string)
+        && data.get('previousNames', []) is list
         && (data.get('color', null) == null || (data.color is string && data.color.size() == 7));
+    }
+
+    // History may only be preserved or extended with this user's own old name.
+    function validNameHistory() {
+      let before = resource.data.get('previousNames', []);
+      let after = request.resource.data.get('previousNames', []);
+      return after == before
+        || (request.resource.data.displayName != resource.data.displayName
+          && after == before.concat([resource.data.displayName]));
     }
 
     // The household must be NEW and created in this same atomic batch.
@@ -69,7 +79,8 @@ service cloud.firestore {
         && request.auth.uid == uid
         && profileHasRequiredFields(request.resource.data)
         && request.resource.data.householdId == null
-        && !request.resource.data.keys().hasAny(['invitationId']);
+        && !request.resource.data.keys().hasAny(['invitationId'])
+        && request.resource.data.get('previousNames', []) == [];
 
       // Supports the app's where('householdId', '==', householdId) query.
       allow get, list: if signedIn()
@@ -79,6 +90,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.auth.uid == uid
         && profileHasRequiredFields(request.resource.data)
+        && validNameHistory()
         && (
           (request.resource.data.householdId == resource.data.householdId
             && request.resource.data.get('invitationId', null) == resource.data.get('invitationId', null))

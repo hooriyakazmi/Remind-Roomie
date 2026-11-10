@@ -6,6 +6,7 @@ A static HTML, CSS, and JavaScript app using Firebase Email/Password Authenticat
 
 - `index.html`, `tasks.html`, `calendar.html`, `family.html`: existing app screens.
 - `login.html`: sign-in, registration, and create/join household forms.
+- `settings.html`: edit your display name and existing color preference.
 - `css/style.css`: shared page and account styles.
 - `js/data.js`: original sample data and the shared page data object. Authenticated pages replace sample household records before rendering.
 - `js/form-controls.js`: immediate open/cancel controls and submit gating, independent of Firebase and the main app script.
@@ -47,9 +48,9 @@ Keep `data.js` and `script.js` as classic scripts. Load `form-controls.js` after
 
 | Location | Contents |
 | --- | --- |
-| `users/{uid}` | Profile: `email`, `displayName`, `householdId`, optional `invitationId` |
+| `users/{uid}` | Profile: `email`, `displayName`, `householdId`, optional `invitationId`, `color`, and `previousNames` |
 | `households/{householdId}` | Household name, creator, creation time |
-| `households/{householdId}/tasks/{taskId}` | Title, assignee names and UIDs, due date/time, request status, completion |
+| `households/{householdId}/tasks/{taskId}` | Title, assignee names and UIDs, assigning user UID (`assignedById`), due date/time, request status, completion |
 | `households/{householdId}/events/{eventId}` | Shared calendar events, attendees, creator, start/end times, location, description |
 | `households/{householdId}/invitations/{code}` | Invited email and redemption state |
 | `users/{uid}/imports/{householdId}` | Marker preventing repeated imports from overwriting cloud changes |
@@ -91,18 +92,18 @@ npm test
 
 `test:rules` starts only the Firestore emulator on `127.0.0.1:8080`, uses the isolated `demo-remind-roomie` project, compiles the actual `Remind_Roomie/firestore.rules`, and stops the emulator afterward. It requires no Firebase login and does not deploy or use the live database. The first run downloads the emulator. Ports 8080, 4400, 4500, and 9150 must be available. The test file refuses to run without `FIRESTORE_EMULATOR_HOST`.
 
-The 19 emulator tests cover signup/profile recovery, atomic household creation, normal profile edits, invalid membership changes, valid atomic invitation redemption, missing/wrong-email/wrong-household/stale/reused invitations, immutable invitation fields (including field deletion), member-profile queries, task CRUD and status changes, shared-event owner permissions, cross-household and unauthenticated access, same-batch membership attacks, and legacy import batches/markers. Payloads match `firebase-household.js`, `firebase-tasks.js`, `auth-page.js`, and `legacy-import.js`. An additional test loads the unchanged browser modules and calls the actual `createHousehold()`, `createHouseholdInvitation()`, `joinHousehold()`, and `listenToHouseholdMembers()` functions against the emulator, including invitation-code normalization and member-listener updates.
+The 23 emulator tests cover signup/profile recovery, atomic household creation, normal profile edits, invalid membership changes, valid atomic invitation redemption, missing/wrong-email/wrong-household/stale/reused invitations, immutable invitation fields (including field deletion), member-profile queries, task CRUD and status changes, shared-event owner permissions, cross-household and unauthenticated access, same-batch membership attacks, and legacy import batches/markers. Payloads match `firebase-household.js`, `firebase-tasks.js`, `auth-page.js`, and `legacy-import.js`. An additional test loads the unchanged browser modules and calls the actual `createHousehold()`, `createHouseholdInvitation()`, `joinHousehold()`, and `listenToHouseholdMembers()` functions against the emulator, including invitation-code normalization and member-listener updates.
 
 The rules require invitations to be pending before the redemption batch and accepted afterward, with `acceptedBy` matching the signed-in user and `acceptedAt` matching the server timestamp. The matching profile must change from no household to that invitation's household in the same batch. New household creation also requires an existing unassigned profile and a simultaneous profile update. Other profile changes cannot alter household membership or the redeemed invitation ID. Tasks remain collaborative within the household; only a shared event's creator may edit or delete it.
 
-Local validation on November 8, 2026: all 19 emulator tests and all 11 application regression tests passed using Firebase CLI 15.35.0, Firestore emulator 1.22.0, Node.js 22, and Java 21. No rules or application code were deployed. Live Authentication configuration and browser connectivity remain separate setup checks.
+Local validation on November 8, 2026: all 23 emulator tests, all 23 application regression tests, and all 30 desktop/mobile browser checks passed using Firebase CLI 15.35.0, Firestore emulator 1.22.0, Node.js 22, and Java 21. No rules or application code were deployed. Live Authentication configuration and browser connectivity remain separate setup checks.
 
 Firebase references: [Auth state observers](https://firebase.google.com/docs/auth/web/manage-users), [realtime listeners and error handling](https://firebase.google.com/docs/firestore/query-data/listen), [security rules tests](https://firebase.google.com/docs/rules/unit-tests).
 
-The Assign task and Invite member controls open/cancel their forms before cloud initialization finishes. Submissions during loading or a failed startup show a status message. Invitation codes appear outside the form so they stay visible after it closes. The application regression suite now includes these startup and button flows (15 tests).
+The Assign task and Invite member controls open/cancel their forms before cloud initialization finishes. Submissions during loading or a failed startup show a status message. Invitation codes appear outside the form so they stay visible after it closes. The application regression suite now includes these startup and button flows (23 tests).
 
 
-### Browser button tests
+### Browser tests
 
 ```sh
 npm ci
@@ -110,6 +111,26 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Playwright starts a separate static server on port 8876 by default. To check an already running server, set `ROOMIE_TEST_BASE_URL=http://localhost:8765`. The 16 Chromium checks cover desktop/mobile form opening, cancelling, submission during pending cloud setup, failed Firebase loads, failed main-script loads, and successful task/invitation submission. Cloud operations are intercepted; these tests do not use a real account or write live data. All 16 checks passed against `http://localhost:8765`, along with the 15 application regression tests.
+Playwright starts a separate static server on port 8876 by default. To check an already running server, set `ROOMIE_TEST_BASE_URL=http://localhost:8765`. The Chromium suite includes 16 checks covering desktop/mobile form opening, cancelling, submission during pending cloud setup, failed Firebase loads, failed main-script loads, and successful task/invitation submission. Cloud operations are intercepted; these tests do not use a real account or write live data. Six additional browser checks cover successful name changes across five open pages, reload persistence, repeated renames, initials, legacy task/event names, failed saves, blank names, and unsaved drafts. Eight additional desktop/mobile checks cover rejection and rescheduling explanations, delivery to the assigner, response history, canceling, blank reasons, failed sends/retries, safe text rendering, and draft/focus preservation during live updates. All 30 browser checks passed, along with the 23 application regression tests.
 
 The protected pages use versioned local script URLs so an existing browser tab fetches the updated form controls on its next navigation. The controls remain available even if household initialization leaves the account name empty; saving still requires successful authentication and household loading.
+
+
+### Changing your name
+
+Open **Settings → Your name**, enter a name (1–60 characters), and choose **Save name**. The account bar, home greeting/avatar, household list, task assignee/author labels, calendar attendees/creator details, and assignee choices update through the existing profile listener, including other open pages. Task/event relationships and colors stay attached to the account ID. Failed saves retain the draft and leave the current profile name intact.
+
+The app uses Firestore's profile `displayName` as its source of truth and synchronizes Firebase Auth's display name afterward. A Firestore transaction appends the prior display name to `previousNames`, allowing older name-only tasks and events to display the latest name without rewriting other members' events. New tasks include `assignedById`, and new calendar attendees already use UIDs. Name lookup prefers UIDs and resolves former names only when exactly one household member matches; legacy records without IDs cannot disambiguate two people who share the same name.
+
+The included **Firestore rules update is required before using live name changes**: older rules reject the `previousNames` field. Rules allow only the profile owner to preserve history or append their own prior display name during a rename; household/invitation access restrictions remain enforced. Nothing has been deployed. Color settings remain intact.
+
+
+### Explaining task rejections and rescheduling
+
+On a requested task, **Reject** opens an explanation box; **Reschedule** opens a new date/time and explanation box. A reason (1–1000 characters after trimming) is required before **Send rejection** or **Save new time** can be submitted. Cancel makes no changes. Failed sends retain the reason and chosen schedule for retry; realtime task/member updates also preserve the draft.
+
+Responses appear in **Tasks → Task responses** for the person who assigned the task, using their account ID. The explanation includes who responded and, for rescheduling, the new due date/time. Prior responses remain available after later updates and page reloads. This is in-app delivery through the existing Firestore task listener. Responses follow the task's existing household access rules.
+
+`respondToTask()` reads the current task and assigner's profile in a Firestore transaction, checks that the sender is an assignee and the task is still awaiting a response, then atomically saves the task change and `responses.{responseId}`. Each response stores `action`, `reason`, `senderId`, `recipientId`, the server `createdAt`, and old/new schedule values. Rescheduling keeps the request pending, matching the existing acceptance flow. Legacy tasks resolve the assigner using an unambiguous current/former name and save the resolved UID; an unidentified or departed assigner produces an error without changing the task.
+
+The new fields are inside existing household task documents, so this feature needs no additional collections or rules changes beyond the current household task permissions. No live task responses were sent and nothing was deployed during development; browser tests use a mock delivery service, while emulator tests exercise the actual transaction and assigner listener.

@@ -46,6 +46,21 @@ function mockFirestore() {
     setDoc: async (ref, data) => { stored.set(ref, data); },
     deleteDoc: async ref => { writes.push({ ref, deleted: true }); },
     getDoc: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
+    runTransaction: async (_db, operation) => operation({
+      get: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
+      update: (ref, changes) => {
+        const next = { ...stored.get(ref) };
+        for (const [key, value] of Object.entries(changes)) {
+          if (key.startsWith('responses.')) {
+            next.responses = { ...next.responses, [key.slice('responses.'.length)]: value };
+          } else {
+            next[key] = value;
+          }
+        }
+        stored.set(ref, next);
+        writes.push({ ref, data: changes });
+      }
+    }),
     onSnapshot: (ref, next, error) => { listeners.push({ ref, next, error }); return () => stopped++; },
     query: ref => ref,
     where: () => {},
@@ -86,6 +101,31 @@ test('task writes preserve scheduling, status and completion; listener forwards 
   assert.equal(error, 'permission-denied');
   stop();
   assert.equal(fake.stopped(), 1);
+});
+
+test('accepting a task records the explanation and updates task status atomically', async () => {
+  const fake = mockFirestore();
+  fake.stored.set('households/home/tasks/one', {
+    title: 'Dishes', memberIds: ['alice'], assignedById: 'bob',
+    date: '2030-03-10', time: '10:00', status: 'requested'
+  });
+  fake.stored.set('users/bob', { householdId: 'home' });
+  const api = await loadModule('firebase-tasks.js', fake.sdk, {
+    crypto: { randomUUID: () => 'response-1' }
+  });
+
+  const result = await api.respondToTask('home', 'one', { uid: 'alice' }, [], {
+    action: 'accepted', reason: '  I can take care of it.  '
+  });
+  const saved = fake.stored.get('households/home/tasks/one');
+
+  assert.equal(saved.status, 'accepted');
+  assert.equal(saved.completed, false);
+  assert.equal(saved.responses['response-1'].action, 'accepted');
+  assert.equal(saved.responses['response-1'].reason, 'I can take care of it.');
+  assert.equal(saved.responses['response-1'].recipientId, 'bob');
+  assert.equal(result.status, 'accepted');
+  assert.equal(fake.writes.length, 1);
 });
 
 test('household subscriptions update existing page data and can all unsubscribe', async () => {
@@ -217,37 +257,42 @@ test('task page renders one card per cloud task and recognizes UID assignees', a
   assert.equal(page.elements.get('allTasks').hidden, false);
   page.elements.get('toggleAllTasks').listeners.click();
   assert.equal(page.elements.get('allTasks').hidden, true);
-  assert.equal(page.elements.get('taskRequests').children[0].className, 'task-request-card');
-  let update;
-  cloud.updateTask = async (id, changes) => { update = { id, changes }; };
+  assert.ok(page.elements.get('taskRequests').children[0].className.includes('task-request-card'));
   const request = page.elements.get('taskRequests').children[0];
   const accept = request.children[3].children[0];
   await accept.listeners.click();
-  assert.equal(update.id, 'task');
-  assert.equal(update.changes.status, 'accepted');
+  const form = page.elements.get('taskRequests').children[0].children.at(-1);
+  assert.equal(form.className, 'task-response-form');
+  assert.equal(form.children[0].textContent, 'Why are you accepting this task?');
 });
 
 test('task details can complete an accepted task assigned to the current user', async () => {
   const task = { id: 'task', title: 'Trash', assignedTo: 'Alice', memberIds: ['alice'], status: 'accepted' };
   const cloud = { user: { uid: 'alice' }, members: [{ id: 'alice', name: 'Alice' }], tasks: [task] };
   const updates = [];
-  cloud.updateTask = async (id, changes) => updates.push({ id, changes });
   const page = await loadPage('tasks', cloud, storage(), { search: '?task=task' });
+  cloud.updateTask = async (id, changes) => {
+    updates.push({ id, changes });
+    Object.assign(task, changes);
+    page.listeners['roomie:tasks-updated']();
+  };
   assert.equal(page.elements.get('taskDetailView').hidden, false);
   const completionButton = page.elements.get('taskDetailCard').children.at(-1);
   assert.equal(completionButton.textContent, 'Mark as complete');
   await completionButton.listeners.click();
-  assert.deepEqual(updates, [{ id: 'task', changes: { status: 'completed' } }]);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].id, 'task');
+  assert.equal(updates[0].changes.status, 'completed');
   assert.equal(page.elements.get('taskDetailCard').children.at(-1).textContent, 'Mark as incomplete');
 });
 
 test('home progress responds to snapshots and account-scoped personal events', async () => {
   const cloud = { user: { uid: 'alice' }, members: [], tasks: [
-    { id: 'one', title: 'Done', status: 'completed', assignedTo: 'Alice' },
-    { id: 'two', title: 'Trash', status: 'accepted', assignedTo: 'Alice' }
+    { id: 'one', title: 'Done', status: 'completed', assignedTo: 'Alice', date: new Date().toISOString().slice(0, 10) },
+    { id: 'two', title: 'Trash', status: 'accepted', assignedTo: 'Alice', date: new Date().toISOString().slice(0, 10) }
   ] };
   const page = await loadPage('index', cloud, storage({ remindRoomieCalendarEvents: [{ title: 'Another account event' }] }));
-  assert.equal(page.elements.get('taskProgress').textContent, '1 of 2 tasks completed');
+  assert.equal(page.elements.get('taskProgress').textContent, '1 of 2 tasks due today completed');
   assert.equal(page.elements.get('progressPercentage').textContent, '50%');
   assert.equal(page.elements.get('homeTasks').children.length, 1);
   assert.equal(page.elements.get('homeEvents').children[0].textContent, 'No personal events this week.');
@@ -360,7 +405,7 @@ test('protected pages wait for the household and release listeners on sign-out',
     authSdk: {
       onAuthStateChanged: (_auth, callback) => authChanged = callback,
       signOut: async () => authChanged(null),
-      createUserWithEmailAndPassword() {}, updateProfile() {}
+      createUserWithEmailAndPassword() {}, updateProfile: async () => {}
     }
   });
   await authChanged({ uid: 'alice' });

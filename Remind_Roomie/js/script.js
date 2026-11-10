@@ -172,6 +172,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             : String(time);
     }
 
+    function displayDueDate(task) {
+        const dueDate = task.date || task.dueDate;
+        if (!dueDate) return "No due date";
+        const date = new Date(`${dueDate}T00:00:00`);
+        const dateText = Number.isNaN(date.getTime())
+            ? dueDate
+            : date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+        const timeText = formatTaskDueTime(task);
+        return `${dateText}${timeText ? ` · ${timeText}` : ""}`;
+    }
+
     function formatEventDate(dateISO) {
         return new Date(`${dateISO}T00:00:00`).toLocaleDateString("en-US", {
             weekday: "short",
@@ -1654,6 +1665,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     const taskRequests = document.getElementById("taskRequests");
 
     if (taskRequests) {
+        const taskResponsesSection = document.getElementById("taskResponsesSection");
+        const taskResponses = document.getElementById("taskResponses");
+        const responseDrafts = new Map();
         const taskListView = document.getElementById("taskListView");
         const taskDetailView = document.getElementById("taskDetailView");
         const taskDetailHero = document.getElementById("taskDetailHero");
@@ -1893,57 +1907,167 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const actions = document.createElement("div");
             actions.className = "task-request-actions";
+            const busy = Boolean(responseDrafts.get(task.id)?.busy);
             [["Accept", "accept-task", "accepted"], ["Reject", "reject-task", "rejected"]]
-                .forEach(([label, className, status]) => {
+                .forEach(([label, className, action]) => {
                     const button = document.createElement("button");
                     button.className = `task-action-button ${className}`;
                     button.type = "button";
                     button.textContent = label;
-                    button.addEventListener("click", () => updateTask(task, { status }, true));
+                    button.disabled = busy;
+                    button.addEventListener("click", () => openResponse(action));
                     actions.append(button);
                 });
+
+            function openResponse(action) {
+                const previous = responseDrafts.get(task.id);
+                responseDrafts.set(task.id, {
+                    reason: previous?.reason || "",
+                    date: previous?.date ?? task.date ?? "",
+                    time: previous?.time ?? task.time ?? "",
+                    action, error: "", busy: false
+                });
+                renderTasks();
+                document.getElementById(`response-reason-${task.id}`)?.focus();
+            }
 
             const rescheduleButton = document.createElement("button");
             rescheduleButton.className = "task-action-button reschedule-task";
             rescheduleButton.type = "button";
             rescheduleButton.textContent = "Reschedule";
-            rescheduleButton.addEventListener("click", () => {
-                if (card.querySelector(".reschedule-form")) {
-                    return;
-                }
-
-                const form = document.createElement("form");
-                form.className = "reschedule-form";
-                const dateInput = document.createElement("input");
-                dateInput.type = "date";
-                dateInput.setAttribute("aria-label", "New due date");
-                dateInput.required = true;
-                dateInput.value = task.date || "";
-                const timeInput = document.createElement("input");
-                timeInput.type = "time";
-                timeInput.setAttribute("aria-label", "New due time");
-                timeInput.value = task.time || "";
-                const saveButton = document.createElement("button");
-                saveButton.className = "task-action-button accept-task";
-                saveButton.type = "submit";
-                saveButton.textContent = "Save new time";
-                const cancelButton = document.createElement("button");
-                cancelButton.className = "task-action-button reject-task";
-                cancelButton.type = "button";
-                cancelButton.textContent = "Cancel";
-                cancelButton.addEventListener("click", () => form.remove());
-                form.append(dateInput, timeInput, saveButton, cancelButton);
-                form.addEventListener("submit", event => {
-                    event.preventDefault();
-                    updateTask(task, { date: dateInput.value, time: timeInput.value });
-                });
-                card.append(form);
-                dateInput.focus();
-            });
+            rescheduleButton.disabled = busy;
+            rescheduleButton.addEventListener("click", () => openResponse("rescheduled"));
 
             card.append(title, assignedBy, due, actions, rescheduleButton);
+            const draft = responseDrafts.get(task.id);
+            if (draft) card.append(createResponseForm(task, draft));
             makeTaskCardOpenable(card, task);
             return card;
+        }
+
+        function createResponseForm(task, draft) {
+            const form = document.createElement("form");
+            form.className = "task-response-form";
+            const rescheduling = draft.action === "rescheduled";
+            if (rescheduling) {
+                [["date", "New due date"], ["time", "New due time"]].forEach(([type, text]) => {
+                    const label = document.createElement("label");
+                    label.textContent = text;
+                    const input = document.createElement("input");
+                    input.type = type;
+                    input.id = `response-${type}-${task.id}`;
+                    input.value = draft[type];
+                    input.required = type === "date";
+                    input.disabled = draft.busy;
+                    input.addEventListener("input", () => { draft[type] = input.value; });
+                    label.append(input);
+                    form.append(label);
+                });
+            }
+
+            const reasonLabel = document.createElement("label");
+            reasonLabel.className = "task-response-reason";
+            reasonLabel.textContent = draft.action === "accepted"
+                ? "Why are you accepting this task?"
+                : rescheduling ? "Why are you rescheduling?" : "Why are you rejecting this task?";
+            const reason = document.createElement("textarea");
+            reason.id = `response-reason-${task.id}`;
+            reason.required = true;
+            reason.maxLength = 1000;
+            reason.rows = 3;
+            reason.value = draft.reason;
+            reason.disabled = draft.busy;
+            reason.placeholder = "Explain your reason to the person who assigned this task.";
+            reason.addEventListener("input", () => { draft.reason = reason.value; });
+            reasonLabel.append(reason);
+
+            const help = document.createElement("p");
+            help.className = "form-help task-response-help";
+            help.textContent = `Your explanation will be sent to ${nameOf(task.assignedById || task.assignedBy) || "the person who assigned this task"} in Task responses.`;
+            const error = document.createElement("p");
+            error.className = "family-message task-response-error";
+            error.setAttribute("role", "alert");
+            error.hidden = !draft.error;
+            error.textContent = draft.error;
+            const send = document.createElement("button");
+            send.type = "submit";
+            send.className = "task-action-button accept-task";
+            send.textContent = draft.busy ? "Sending…" : rescheduling ? "Save new time"
+                : draft.action === "accepted" ? "Send acceptance" : "Send rejection";
+            send.disabled = draft.busy;
+            const cancel = document.createElement("button");
+            cancel.type = "button";
+            cancel.className = "task-action-button reject-task";
+            cancel.textContent = "Cancel";
+            cancel.disabled = draft.busy;
+            cancel.addEventListener("click", () => { responseDrafts.delete(task.id); renderTasks(); });
+            form.append(reasonLabel, help, error, send, cancel);
+            form.addEventListener("submit", async event => {
+                event.preventDefault();
+                if (draft.busy) return;
+                draft.reason = reason.value;
+                if (!draft.reason.trim() || draft.reason.trim().length > 1000) {
+                    draft.error = "Enter an explanation between 1 and 1000 characters.";
+                    error.textContent = draft.error;
+                    error.hidden = false;
+                    reason.focus();
+                    return;
+                }
+                draft.busy = true;
+                draft.error = "";
+                renderTasks();
+                try {
+                    const result = await window.roomieCloud.respondToTask(task.id, {
+                        action: draft.action, reason: draft.reason,
+                        ...(rescheduling ? { date: draft.date, time: draft.time } : {})
+                    });
+                    responseDrafts.delete(task.id);
+                    loadError = "";
+                    feedback = {
+                        task: { ...task, ...result },
+                        status: draft.action,
+                        recipientId: result.recipientId
+                    };
+                } catch (error) {
+                    console.error("Could not send the task response.", error);
+                    draft.busy = false;
+                    draft.error = "Could not send your explanation. " + (error.code === "permission-denied"
+                        ? "Check your household access and try again."
+                        : error.message || "Please try again.");
+                    loadError = draft.error;
+                }
+                renderTasks();
+            });
+            return form;
+        }
+
+        function renderResponses(tasks) {
+            taskResponses.replaceChildren();
+            const notes = tasks.flatMap(task => Object.entries(task.responses || {})
+                .filter(([, note]) => note?.recipientId === meId && ["accepted", "rejected", "rescheduled"].includes(note.action))
+                .map(([id, note]) => ({ ...note, id, task })));
+            const sentAt = note => note.createdAt?.toMillis?.() || (note.createdAt?.seconds || 0) * 1000;
+            notes.sort((a, b) => sentAt(b) - sentAt(a));
+            taskResponsesSection.hidden = notes.length === 0;
+            notes.forEach(note => {
+                const card = document.createElement("article");
+                card.className = "task-response-card";
+                const title = document.createElement("h3");
+                const verb = note.action === "accepted" ? "accepted"
+                    : note.action === "rejected" ? "rejected" : "rescheduled";
+                title.textContent = `${nameOf(note.senderId)} ${verb} “${note.task.title}”`;
+                const reason = document.createElement("p");
+                reason.className = "task-response-text";
+                reason.textContent = note.reason;
+                card.append(title, reason);
+                if (note.action === "rescheduled") {
+                    const schedule = document.createElement("p");
+                    schedule.className = "task-due";
+                    schedule.textContent = `New schedule: ${displayDueDate(note)}`;
+                    card.append(schedule);
+                }
+                taskResponses.append(card);
+            });
         }
 
         function openTask(id) {
@@ -2033,28 +2157,34 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         function renderFeedback() {
             const accepted = feedback.status === "accepted";
+            const rescheduled = feedback.status === "rescheduled";
             feedbackView.hidden = false;
             taskListView.hidden = true;
             document.body.classList.add("show-task-feedback");
             feedbackIcon.innerHTML = accepted
                 ? '<i class="fa-solid fa-check" aria-hidden="true"></i>'
-                : '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-            feedbackTitle.textContent = accepted ? "Task accepted!" : "Task declined";
-            feedbackMessage.textContent = accepted
-                ? `${feedback.task.title} is now in Your Tasks.`
-                : `${feedback.task.title} was declined.`;
+                : rescheduled ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i>'
+                    : '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+            feedbackTitle.textContent = accepted ? "Task accepted!" : rescheduled ? "Task rescheduled" : "Task declined";
+            feedbackMessage.textContent = `Your explanation was sent to ${nameOf(feedback.recipientId)} in Task responses.`
+                + (accepted ? ` ${feedback.task.title} is now in Your Tasks.` : "");
             feedbackTaskCard.replaceChildren(createTaskSummary({
                 ...feedback.task,
-                status: accepted ? "accepted" : "rejected"
+                status: accepted ? "accepted" : rescheduled ? "requested" : "rejected"
             }, { showStatus: true, openable: false }));
         }
 
         function renderTasks() {
+            const active = document.activeElement;
+            const restoreId = active?.id?.startsWith("response-") ? active.id : null;
+            const selection = restoreId && typeof active.selectionStart === "number"
+                ? [active.selectionStart, active.selectionEnd] : null;
             taskRequests.replaceChildren();
             yourTasksList.replaceChildren();
             allTasksList.replaceChildren();
             pastTasksList.replaceChildren();
             const tasks = allTasks();
+            renderResponses(tasks);
             const pastTasks = tasks.filter(task =>
                 task.status === "completed" && isTaskPastDue(task)
             );
@@ -2113,6 +2243,11 @@ document.addEventListener("DOMContentLoaded", async function () {
                 feedbackView.hidden = true;
                 taskDetailView.hidden = true;
                 taskListView.hidden = false;
+            }
+            if (restoreId) {
+                const restore = document.getElementById(restoreId);
+                restore?.focus();
+                if (restore && selection) restore.setSelectionRange(...selection);
             }
         }
 

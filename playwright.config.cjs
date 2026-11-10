@@ -2,7 +2,7 @@ const { defineConfig } = require('@playwright/test');
 const baseURL = process.env.ROOMIE_TEST_BASE_URL || 'http://127.0.0.1:8876';
 module.exports = defineConfig({
   testDir: './tests',
-  testMatch: 'browser-buttons.spec.cjs',
+  testMatch: 'browser-*.spec.cjs',
   workers: 1,
   reporter: 'list',
   use: { baseURL, screenshot: 'only-on-failure' },

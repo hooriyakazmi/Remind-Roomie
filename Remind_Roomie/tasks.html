@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Tasks</title>
-    <link rel="stylesheet" href="css/style.css?v=20261109-all-tasks-dropdown-1">
+    <link rel="stylesheet" href="css/style.css?v=20261110-task-responses-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -19,6 +19,14 @@
         </header>
 
         <div id="taskListView">
+            <section class="task-history" id="taskResponsesSection" hidden>
+                <div class="section-heading">
+                    <h2>Task responses</h2>
+                </div>
+                <p class="form-help">Explanations from people you assigned tasks to.</p>
+                <div id="taskResponses" aria-live="polite"></div>
+            </section>
+
             <section class="task-notifications">
                 <div class="section-heading">
                     <h2>New Task Requested</h2>
@@ -145,7 +153,7 @@
 
     <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
     <script src="js/data.js?v=20261108-addbtn-1"></script>
-    <script src="js/script.js?v=20261109-all-tasks-dropdown-1"></script>
+    <script src="js/script.js?v=20261110-task-responses-1"></script>
 
 </body>
 </html>

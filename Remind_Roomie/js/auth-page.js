@@ -117,8 +117,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("loginEmail").focus();
   });
 
-  
-
   document.getElementById("createHouseholdForm").addEventListener("submit", async event => {
     event.preventDefault();
     message.hidden = true;

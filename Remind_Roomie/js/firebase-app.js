@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { createHouseholdCloud } from "./firebase-household.js";
 import { offerLegacyImport } from "./legacy-import.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+import { onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
 function reportError(error) {
@@ -58,6 +58,11 @@ window.roomieHouseholdReady = new Promise(resolve => {
       if (!householdSnapshot.exists()) throw new Error("Your household could not be found.");
 
       const name = profile.displayName || user.displayName || "Roommate";
+      if (user.displayName !== name) {
+        updateProfile(user, { displayName: name }).catch(error => {
+          console.warn("Could not synchronize the account display name.", error);
+        });
+      }
       const data = window.householdData;
       data.user = { name, initials: name.charAt(0).toUpperCase(), greeting: "Welcome back!" };
       data.family = [{ id: user.uid, name, role: "You", initials: data.user.initials }];
