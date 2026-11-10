@@ -940,7 +940,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         togglePastEventsButton.addEventListener("click", () => {
             const isExpanded = togglePastEventsButton.getAttribute("aria-expanded") !== "true";
             togglePastEventsButton.setAttribute("aria-expanded", String(isExpanded));
-            togglePastEventsButton.textContent = isExpanded ? "Hide past events" : "Show past events";
             pastEventsList.hidden = !isExpanded;
         });
 
