@@ -2433,6 +2433,21 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
         });
 
+        const includeTasksToggle = document.getElementById("includeTasksToggle");
+        const toggleSettingsMessage = document.getElementById("toggleSettingsMessage");
+        const includeTasksKey = storageKey("remindRoomieIncludeTasks");
+        includeTasksToggle.checked = localStorage.getItem(includeTasksKey) === "on";
+        includeTasksToggle.addEventListener("change", () => {
+            try {
+                localStorage.setItem(includeTasksKey, includeTasksToggle.checked ? "on" : "off");
+                showSettingsMessage(toggleSettingsMessage, "Calendar setting saved.");
+            } catch (error) {
+                console.error("Could not save the calendar setting.", error);
+                includeTasksToggle.checked = !includeTasksToggle.checked;
+                showSettingsMessage(toggleSettingsMessage, "Could not save this setting. Please try again.", true);
+            }
+        });
+
         function renderSettings() {
             renderName();
             renderColors();
