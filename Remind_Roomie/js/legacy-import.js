@@ -1,5 +1,5 @@
 import { db } from "./firebase-config.js";
-import { doc, getDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
+import { doc, getDoc, runTransaction, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
 // Import is explicit because the old browser store has no account ownership.
 // Keep the original keys intact so failed imports never destroy the source data.
@@ -43,7 +43,7 @@ export async function importLegacyData(cloud, storage = localStorage) {
       ...data, createdBy: cloud.user.uid, createdAt: serverTimestamp()
     });
   });
-  // Store private events under this account's key before committing shared data.
+  // Stage personal events under this account before synchronizing them to the household.
   // Stable IDs also make retries safe if the cloud batch fails.
   const key = `remindRoomieCalendarEvents:${cloud.user.uid}`;
   const existing = read(key, []);
@@ -67,7 +67,7 @@ export function offerLegacyImport(cloud) {
     const container = document.createElement("aside");
     container.className = "app-status";
     const explanation = document.createElement("p");
-    explanation.textContent = "Older browser data is available. Import only if it belongs to you: saved tasks and shared events will be visible to this household. Personal events stay in this browser under your account.";
+    explanation.textContent = "Older browser data is available. Import only if it belongs to you: saved tasks and all calendar events will be visible to this household. Personal events appear on other members’ Shared tabs.";
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Import my browser data";
@@ -75,6 +75,7 @@ export function offerLegacyImport(cloud) {
       button.disabled = true;
       try {
         await importLegacyData(cloud);
+        await syncAccountCalendar(cloud);
         localStorage.setItem(doneKey, "true");
         window.dispatchEvent(new CustomEvent("roomie:local-events-updated"));
         explanation.textContent = "Browser data imported. The original browser data has been kept.";
@@ -90,4 +91,35 @@ export function offerLegacyImport(cloud) {
   } catch (error) {
     console.error("Browser storage is unavailable.", error);
   }
+}
+
+// Upgrade account-owned browser events so every household member can see them.
+// A stable document ID and transaction make retries safe without overwriting edits.
+export async function syncAccountCalendar(cloud, storage = localStorage) {
+  const key = `remindRoomieCalendarEvents:${cloud.user.uid}`;
+  const read = (name, fallback) => JSON.parse(storage.getItem(name) || JSON.stringify(fallback));
+  const events = read(key, []);
+  const edits = read(`remindRoomieCalendarEdits:${cloud.user.uid}`, {});
+  const deleted = read(`remindRoomieDeletedEvents:${cloud.user.uid}`, []);
+  if (!Array.isArray(events) || !Array.isArray(deleted) || !edits || typeof edits !== "object") {
+    throw new Error("This account's calendar storage is invalid.");
+  }
+  for (const event of events) {
+    if (deleted.includes(event.id)) continue;
+    const { id, _remote, ...data } = { ...event, ...(edits[event.id] || {}) };
+    const ref = doc(db, "households", cloud.householdId, "events",
+      `browser-${cloud.user.uid}-${encodeURIComponent(id)}`);
+    await runTransaction(db, async transaction => {
+      if ((await transaction.get(ref)).exists()) return;
+      transaction.set(ref, {
+        ...data,
+        attendees: data.attendees?.length ? data.attendees : [cloud.user.uid],
+        scope: data.scope || "personal",
+        createdBy: cloud.user.uid,
+        createdAt: serverTimestamp()
+      });
+    });
+  }
+  // Keep the browser source intact if any cloud write fails.
+  if (events.length) storage.setItem(key, "[]");
 }

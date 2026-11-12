@@ -284,6 +284,21 @@ test('shared event CRUD and queries preserve creator-only editing and deletion',
   await assertSucceeds(deleteDoc(eventRef(db)));
 });
 
+test('personal events are readable by housemates and editable only by their creator', async () => {
+  const db = client('alice');
+  const ref = eventRef(db, 'home', 'personal');
+  await assertSucceeds(setDoc(ref, { ...event(), scope: 'personal', attendees: ['alice'] }));
+  await createInvite();
+  await join(client('bob'));
+  const bobRef = eventRef(client('bob'), 'home', 'personal');
+  await assertSucceeds(getDoc(bobRef));
+  await assertSucceeds(getDocs(collection(client('bob'), 'households/home/events')));
+  await assertFails(updateDoc(bobRef, { title: 'Changed by housemate' }));
+  await assertFails(deleteDoc(bobRef));
+  await assertSucceeds(updateDoc(ref, { title: 'Updated personal event' }));
+  await assertSucceeds(deleteDoc(ref));
+});
+
 test('legacy import batch matches legacy-import.js and markers cannot be overwritten or accessed by others', async () => {
   const db = client('alice');
   const marker = doc(db, 'users/alice/imports/home');

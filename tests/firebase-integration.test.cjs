@@ -48,6 +48,7 @@ function mockFirestore() {
     getDoc: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
     runTransaction: async (_db, operation) => operation({
       get: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
+      set: (ref, data) => { stored.set(ref, data); writes.push({ ref, data }); },
       update: (ref, changes) => {
         const next = { ...stored.get(ref) };
         for (const [key, value] of Object.entries(changes)) {
@@ -288,8 +289,8 @@ test('task details can complete an accepted task assigned to the current user', 
 
 test('home progress responds to snapshots and account-scoped personal events', async () => {
   const cloud = { user: { uid: 'alice' }, members: [], tasks: [
-    { id: 'one', title: 'Done', status: 'completed', assignedTo: 'Alice', date: new Date().toISOString().slice(0, 10) },
-    { id: 'two', title: 'Trash', status: 'accepted', assignedTo: 'Alice', date: new Date().toISOString().slice(0, 10) }
+    { id: 'one', title: 'Done', status: 'completed', assignedTo: 'Alice', date: new Date().toLocaleDateString('en-CA') },
+    { id: 'two', title: 'Trash', status: 'accepted', assignedTo: 'Alice', date: new Date().toLocaleDateString('en-CA') }
   ] };
   const page = await loadPage('index', cloud, storage({ remindRoomieCalendarEvents: [{ title: 'Another account event' }] }));
   assert.equal(page.elements.get('taskProgress').textContent, '1 of 2 tasks due today completed');
@@ -301,29 +302,24 @@ test('home progress responds to snapshots and account-scoped personal events', a
   assert.equal(page.elements.get('progressPercentage').textContent, '0%');
 });
 
-test('calendar personal create/edit/delete stays scoped to the account', async () => {
+test('personal events use household persistence and retain their guest list', async () => {
   const saved = storage();
   const cloud = { user: { uid: 'alice' }, members: [], tasks: [], events: [] };
   const page = await loadPage('calendar', cloud, saved);
+  let created;
+  cloud.addEvent = async event => {
+    created = event;
+    cloud.events = [{ ...event, id: 'personal-remote', createdBy: 'alice', _remote: true }];
+    page.listeners['roomie:events-updated']();
+    return 'personal-remote';
+  };
   const fields = page.elements;
   for (const [id, value] of Object.entries({ eventTitle: 'Dentist', eventDate: '2026-11-12', eventTime: '10:00', eventEndTime: '11:00' })) fields.get(id).value = value;
-  await fields.get('addEventForm').listeners.submit({ preventDefault() {}, stopImmediatePropagation() {} });
-  let events = JSON.parse(saved.getItem('remindRoomieCalendarEvents:alice'));
-  assert.equal(events.length, 1);
-  assert.equal(events[0].title, 'Dentist');
-  assert.equal(saved.getItem('remindRoomieCalendarEvents'), null);
-  const day = fields.get('dayEvents').children[0];
-  day.listeners.click();
-  const editPerson = new Element('input'); editPerson.checked = true; editPerson.value = 'alice';
-  fields.get('editAssignees').append(editPerson);
-  for (const [id, value] of Object.entries({ editTitle: 'New dentist', editDate: '2026-11-12', editTime: '11:00', editEndTime: '12:00' })) fields.get(id).value = value;
-  await fields.get('editEventForm').listeners.submit({ preventDefault() {}, stopImmediatePropagation() {} });
-  const edits = JSON.parse(saved.getItem('remindRoomieCalendarEdits:alice'));
-  assert.equal(edits[events[0].id].title, 'New dentist');
-  const actions = fields.get('eventHero').children[0].children[1];
-  actions.children[1].listeners.click();
-  await fields.get('confirmDelete').listeners.click();
-  assert.equal(JSON.parse(saved.getItem('remindRoomieDeletedEvents:alice'))[0], events[0].id);
+  await fields.get('addEventForm').listeners.submit({ preventDefault() {} });
+  assert.equal(created.scope, 'personal');
+  assert.deepEqual(Array.from(created.attendees), ['alice']);
+  assert.equal(saved.getItem('remindRoomieCalendarEvents:alice'), null);
+  assert.equal(fields.get('dayEvents').children.length, 1);
 });
 
 test('shared event create uses snapshot once and edit/delete call the cloud', async () => {
@@ -512,4 +508,38 @@ test('a blocked Firebase module reports an error without disabling the Assign ta
   assert.match(page.document.body.children[0].textContent, /Could not load Firebase/);
   page.elements.get('openAddTask').listeners.click();
   assert.equal(page.elements.get('addTaskForm').hidden, false);
+});
+
+test('account calendar migration applies edits/deletions and retries without overwriting cloud edits', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('legacy-import.js', fake.sdk);
+  const initial = {
+    'remindRoomieCalendarEvents:alice': [
+      {id:'one',title:'Dentist',scope:'personal',attendees:['alice']},
+      {id:'gone',title:'Deleted',scope:'personal'}
+    ],
+    'remindRoomieCalendarEdits:alice': {one:{title:'Edited dentist'}},
+    'remindRoomieDeletedEvents:alice': ['gone']
+  };
+  const saved = storage(initial);
+  const cloud = {user:{uid:'alice'},householdId:'home'};
+  await api.syncAccountCalendar(cloud, saved);
+  const ref = 'households/home/events/browser-alice-one';
+  assert.equal(fake.stored.get(ref).title, 'Edited dentist');
+  assert.equal(fake.stored.get(ref).createdBy, 'alice');
+  assert.equal(fake.stored.has('households/home/events/browser-alice-gone'), false);
+  assert.equal(saved.getItem('remindRoomieCalendarEvents:alice'), '[]');
+  fake.stored.get(ref).title = 'Cloud edit';
+  await api.syncAccountCalendar(cloud, storage(initial));
+  assert.equal(fake.stored.get(ref).title, 'Cloud edit');
+});
+
+test('failed calendar migration keeps its browser source for retry', async () => {
+  const fake = mockFirestore();
+  fake.sdk.runTransaction = async () => { throw new Error('Offline'); };
+  const api = await loadModule('legacy-import.js', fake.sdk);
+  const saved = storage({'remindRoomieCalendarEvents:alice': [{id:'one',title:'Dentist'}]});
+  const before = saved.getItem('remindRoomieCalendarEvents:alice');
+  await assert.rejects(api.syncAccountCalendar({user:{uid:'alice'},householdId:'home'}, saved), /Offline/);
+  assert.equal(saved.getItem('remindRoomieCalendarEvents:alice'), before);
 });
