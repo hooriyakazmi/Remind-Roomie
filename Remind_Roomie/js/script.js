@@ -35,7 +35,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Identify people by account ID, so a rename doesn't detach their events or color.
     // Older events were saved with names, so names still count as a match.
     const meId = window.roomieCloud.user.uid;
-    const isMe = value => value === meId || value === householdData.user.name;
+    const isMe = value => value === meId || value === householdData.user.name ||
+        householdData.family.find(member => member.id === meId)?.previousNames?.includes(value);
     const memberFor = value => householdData.family.find(member => member.id === value || member.name === value);
     const nameOf = value => memberFor(value)?.name || value;
     const myColor = () => memberFor(meId)?.color || "";
@@ -673,7 +674,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 ...householdData.calendar.housemates.map(event => ({ ...event, kind: "personal" })),
                 ...householdData.calendar.shared.map(event => ({
                     ...event,
-                    kind: "family",
+                    kind: event.scope === "personal" ? "personal" : "family",
                     owner: event.createdBy || event.addedBy
                 })),
                 ...savedEvents.map(event => event.scope === "shared"
@@ -682,19 +683,33 @@ document.addEventListener("DOMContentLoaded", async function () {
             ];
         }
 
-        // Personal tab: your own events, plus shared events you are part of
-        // (events with no attendee list are shared with the whole family).
-        // Shared tab: everyone's events.
+        // Explicit guest lists decide Personal visibility, including for the creator.
+        // Older records without a guest list retain their original audience.
         function visibleEvents() {
-            return allEvents().filter(event => {
-                if (scope === "personal") {
-                    const isMine = event.kind === "personal" && isMe(event.owner);
-                    const isIncluded = event.kind === "family" &&
-                        (!event.attendees?.length || event.attendees.some(isMe));
-                    return isMine || isIncluded;
-                }
-                return true;
+            const events = allEvents().filter(event => scope === "shared" ||
+                (event.attendees?.length
+                    ? event.attendees.some(isMe)
+                    : event.kind === "personal" ? isMe(event.owner) : true));
+            if (scope !== "personal" || localStorage.getItem(storageKey("remindRoomieIncludeTasks")) !== "on") {
+                return events;
+            }
+            const tasks = window.roomieCloud.tasks.filter(task => {
+                const assignees = task.memberIds?.length ? task.memberIds :
+                    (Array.isArray(task.assignedTo) ? task.assignedTo : String(task.assignedTo || "").split(",").map(value => value.trim()));
+                return assignees.some(isMe) || assignees.includes("Household") ||
+                    isMe(task.assignedById || task.assignedBy);
+            }).flatMap(task => {
+                const due = taskDueDateTime(task);
+                if (!Number.isFinite(due)) return [];
+                return [{
+                    ...task, id: `task:${task.id}`, taskId: task.id, kind: "task",
+                    date: toISODate(new Date(due)), time: task.time || task.dueTime || "",
+                    owner: task.assignedById || task.assignedBy,
+                    addedBy: task.assignedById || task.assignedBy,
+                    attendees: task.memberIds || []
+                }];
             });
+            return [...events, ...tasks];
         }
 
         function ownerOf(event) {
@@ -914,10 +929,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             card.tabIndex = 0;
             card.setAttribute("role", "button");
-            card.addEventListener("click", () => openEvent(event.id));
+            const openCard = () => event.taskId
+                ? window.location.assign(`tasks.html?task=${encodeURIComponent(event.taskId)}`)
+                : openEvent(event.id);
+            card.addEventListener("click", openCard);
             card.addEventListener("keydown", keyEvent => {
                 if (keyEvent.key === "Enter") {
-                    openEvent(event.id);
+                    openCard();
                 }
             });
 
@@ -1268,7 +1286,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                 endTime: editEndTime.value,
                 location: editLocation.value.trim(),
                 description: editDescription.value.trim(),
-                attendees
+                attendees,
+                scope: attendees.length === 1 && isMe(attendees[0]) ? "personal" : "shared"
             };
             const remoteEvent = householdData.calendar.shared.find(item => item.id === openEventId);
             if (remoteEvent) {
@@ -1388,26 +1407,13 @@ document.addEventListener("DOMContentLoaded", async function () {
                     ? "personal"
                     : "shared"
             };
-            if (newEvent.scope === "shared") {
-                try {
-                    newEvent.id = await window.roomieCloud.addEvent(newEvent);
-                    newEvent._remote = true;
-                    // onSnapshot supplies the event; inserting here would duplicate it.
-                } catch (error) {
-                    console.error("Could not save the shared event.", error);
-                    showEventMessage("Could not save this shared event. Please try again.");
-                    return;
-                }
-            } else {
-                const nextEvents = [...savedEvents, newEvent];
-                try {
-                    localStorage.setItem(calendarStorageKey, JSON.stringify(nextEvents));
-                } catch (error) {
-                    console.error("Could not save the new event.", error);
-                    showEventMessage("Could not save this event in your browser storage.");
-                    return;
-                }
-                savedEvents = nextEvents;
+            try {
+                newEvent.id = await window.roomieCloud.addEvent(newEvent);
+                // The household snapshot supplies personal and shared events alike.
+            } catch (error) {
+                console.error("Could not save the event.", error);
+                showEventMessage("Could not save this event. Please try again.");
+                return;
             }
 
             // Jump to the new event so it is visible straight away
@@ -1424,7 +1430,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.addEventListener("roomie:events-updated", () => {
             householdData.calendar.shared = window.roomieCloud.events.map(event => ({
                 ...event,
-                kind: "family",
+                kind: event.scope === "personal" ? "personal" : "family",
                 owner: event.createdBy || event.addedBy
             }));
             render();
@@ -1442,7 +1448,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             openRequestedEvent();
         });
         window.addEventListener("storage", event => {
-            if ([calendarStorageKey, editsStorageKey, deletedStorageKey].includes(event.key) || event.key === null) {
+            if ([calendarStorageKey, editsStorageKey, deletedStorageKey, storageKey("remindRoomieIncludeTasks")].includes(event.key) || event.key === null) {
                 loadSavedEvents();
                 loadEventEdits();
                 loadDeletedEvents();
@@ -2430,6 +2436,21 @@ document.addEventListener("DOMContentLoaded", async function () {
             } catch (error) {
                 console.error("Could not save the name.", error);
                 showSettingsMessage(nameSettingsMessage, "Could not save your name. Please try again.", true);
+            }
+        });
+
+        const includeTasksToggle = document.getElementById("includeTasksToggle");
+        const toggleSettingsMessage = document.getElementById("toggleSettingsMessage");
+        const includeTasksKey = storageKey("remindRoomieIncludeTasks");
+        includeTasksToggle.checked = localStorage.getItem(includeTasksKey) === "on";
+        includeTasksToggle.addEventListener("change", () => {
+            try {
+                localStorage.setItem(includeTasksKey, includeTasksToggle.checked ? "on" : "off");
+                showSettingsMessage(toggleSettingsMessage, "Calendar setting saved.");
+            } catch (error) {
+                console.error("Could not save the calendar setting.", error);
+                includeTasksToggle.checked = !includeTasksToggle.checked;
+                showSettingsMessage(toggleSettingsMessage, "Could not save this setting. Please try again.", true);
             }
         });
 

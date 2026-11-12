@@ -155,7 +155,7 @@ export function listenToHouseholdMembers(householdId, callback, onError) {
   }, onError);
 }
 
-// All shared calendar writes stay inside the authenticated household's Firestore path.
+// All household calendar writes stay inside the authenticated household's Firestore path.
 export function listenToEvents(householdId, callback, onError) {
   return onSnapshot(
     collection(db, "households", householdId, "events"),
@@ -214,7 +214,7 @@ export function createHouseholdCloud(householdId, user, onError) {
       cloud.events = events;
       window.householdData.calendar.shared = events.map(event => ({
         ...event,
-        kind: "family",
+        kind: event.scope === "personal" ? "personal" : "family",
         owner: event.createdBy || event.addedBy
       }));
       window.dispatchEvent(new CustomEvent("roomie:events-updated"));

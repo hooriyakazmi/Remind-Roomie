@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { createHouseholdCloud } from "./firebase-household.js";
-import { offerLegacyImport } from "./legacy-import.js";
+import { offerLegacyImport, syncAccountCalendar } from "./legacy-import.js";
 import { onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
@@ -71,6 +71,12 @@ window.roomieHouseholdReady = new Promise(resolve => {
       window.roomieCloud = createHouseholdCloud(profile.householdId, user, reportError);
       const accountName = document.getElementById("accountName");
       if (accountName) accountName.textContent = name;
+      try {
+        await syncAccountCalendar(window.roomieCloud);
+      } catch (error) {
+        reportError(error);
+      }
+      if (currentGeneration !== generation) return;
       offerLegacyImport(window.roomieCloud);
       resolve(window.roomieCloud);
     } catch (error) {
