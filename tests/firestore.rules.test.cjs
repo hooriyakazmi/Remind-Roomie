@@ -61,6 +61,85 @@ beforeEach(async () => {
 });
 after(async () => { if (env) await env.cleanup(); });
 
+test('household chat permits members to read and send only their own valid messages', async () => {
+  await seed({ 'users/bob': profile('bob', 'home') });
+  const messages = db => collection(db, 'households', 'home', 'messages');
+  const message = db => doc(messages(db), 'first');
+  const alice = client('alice');
+  const bob = client('bob');
+  const data = { senderId: 'alice', text: 'Hi, Bob!\nDinner at 6?', createdAt: serverTimestamp() };
+  await assertSucceeds(setDoc(message(alice), data));
+  await assertSucceeds(setDoc(doc(messages(bob), 'reply'), { ...data, senderId: 'bob', text: 'Yes!' }));
+  assert.equal((await assertSucceeds(getDocs(messages(bob)))).size, 2);
+  await assertFails(getDocs(messages(client('eve'))));
+  await assertFails(getDoc(message(client())));
+  await assertFails(setDoc(doc(messages(client('eve')), 'intrusion'), { ...data, senderId: 'eve' }));
+  const invalid = doc(messages(alice), 'invalid');
+  await assertFails(setDoc(invalid, { ...data, senderId: 'bob' }));
+  await assertFails(setDoc(invalid, { ...data, text: ' \t\n' }));
+  await assertFails(setDoc(invalid, { ...data, text: 'x'.repeat(1001) }));
+  await assertFails(setDoc(invalid, { ...data, createdAt: Timestamp.fromMillis(0) }));
+  await assertFails(setDoc(invalid, { ...data, extra: true }));
+  await assertFails(updateDoc(message(alice), { text: 'Edited' }));
+  await assertFails(deleteDoc(message(bob)));
+});
+
+test('direct and group chats limit creation, listing, and messaging to the correct household members', async () => {
+  await seed({
+    'users/bob': profile('bob', 'home'),
+    'users/cara': profile('cara', 'home'),
+    'users/dan': profile('dan', 'home')
+  });
+  const alice = client('alice');
+  const bob = client('bob');
+  const cara = client('cara');
+  const dan = client('dan');
+  const chats = db => collection(db, 'households', 'home', 'chats');
+  const direct = db => doc(chats(db), 'dm_5_alicebob');
+  const group = db => doc(chats(db), 'dinner');
+  const message = chat => doc(chat, 'messages', 'hello');
+  const members = uid => query(chats(client(uid)), where('memberIds', 'array-contains', uid));
+  const metadata = { memberIds: ['alice', 'bob'], createdBy: 'alice', createdAt: serverTimestamp() };
+  const dm = { ...metadata, type: 'direct' };
+  const dinner = { ...metadata, type: 'group', name: 'Dinner', memberIds: ['alice', 'bob', 'cara'] };
+  const text = uid => ({ senderId: uid, text: 'Hello!', createdAt: serverTimestamp() });
+
+  await assertSucceeds(setDoc(direct(alice), dm));
+  await assertSucceeds(setDoc(group(alice), dinner));
+  await assertFails(setDoc(direct(bob), { ...dm, createdBy: 'bob' }));
+  await assertFails(setDoc(doc(chats(alice), 'dm_3_bobalice'), { ...dm, memberIds: ['bob', 'alice'] }));
+  await assertFails(setDoc(doc(chats(alice), 'invalid'), { ...dinner, memberIds: ['alice', 'bob', 'eve'] }));
+  await assertFails(setDoc(doc(chats(alice), 'invalid'), { ...dinner, memberIds: ['alice', 'bob', 'bob'] }));
+  await assertFails(setDoc(doc(chats(alice), 'invalid'), { ...dinner, memberIds: ['bob', 'cara', 'dan'] }));
+  await assertFails(updateDoc(group(alice), { memberIds: ['alice', 'bob', 'cara', 'dan'] }));
+  await assertFails(getDocs(chats(bob)));
+  assert.equal((await assertSucceeds(getDocs(members('bob')))).size, 2);
+  assert.equal((await assertSucceeds(getDocs(members('cara')))).size, 1);
+  assert.equal((await assertSucceeds(getDocs(members('dan')))).size, 0);
+  await assertFails(getDocs(members('eve')));
+  await assertFails(getDoc(direct(cara)));
+  await assertFails(getDoc(group(dan)));
+
+  await assertSucceeds(setDoc(message(direct(alice)), text('alice')));
+  await assertSucceeds(getDoc(message(direct(bob))));
+  await assertFails(getDoc(message(direct(cara))));
+  await assertFails(getDocs(collection(direct(cara), 'messages')));
+  await assertFails(setDoc(doc(direct(cara), 'messages', 'reply'), text('cara')));
+  await assertSucceeds(setDoc(message(group(cara)), text('cara')));
+  await assertSucceeds(getDoc(message(group(bob))));
+  await assertFails(getDoc(message(group(dan))));
+  await assertFails(setDoc(doc(group(bob), 'messages', 'spoof'), text('alice')));
+});
+
+test('group chats support ten members within the rules read limit', async () => {
+  const others = Array.from({ length: 10 }, (_, i) => `member${i}`);
+  await seed(Object.fromEntries(others.map(uid => [`users/${uid}`, profile(uid, 'home')])));
+  const chats = collection(client('alice'), 'households', 'home', 'chats');
+  const group = { type: 'group', name: 'Everyone', createdBy: 'alice', createdAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(chats, 'ten'), { ...group, memberIds: ['alice', ...others.slice(0, 9)] }));
+  await assertFails(setDoc(doc(chats, 'eleven'), { ...group, memberIds: ['alice', ...others] }));
+});
+
 test('signup and missing-profile recovery allow only an unassigned self profile', async () => {
   const db = client('new');
   await assertSucceeds(setDoc(doc(db, 'users/new'), profile('new')));

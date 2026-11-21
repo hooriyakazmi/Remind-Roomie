@@ -63,12 +63,14 @@ export async function setTaskCompleted(householdId, taskId, completed) {
   });
 }
 
-// Record the explanation and task change atomically. The original assigner gets
+// Record the response and task change atomically. The original assigner gets
 // the response through the same task subscription used by the existing pages.
 export async function respondToTask(householdId, taskId, user, members, response) {
   const reason = typeof response.reason === "string" ? response.reason.trim() : "";
   if (!["accepted", "rejected", "rescheduled"].includes(response.action)) throw new Error("Choose a valid task response.");
-  if (!reason || reason.length > 1000) throw new Error("Enter an explanation between 1 and 1000 characters.");
+  if (reason.length > 1000 || (!reason && response.action !== "accepted")) {
+    throw new Error("Enter an explanation between 1 and 1000 characters.");
+  }
   if (response.action === "rescheduled") {
     const date = response.date || "";
     const parsed = new Date(`${date}T00:00:00Z`);

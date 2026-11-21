@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Home</title>
-    <link rel="stylesheet" href="css/style.css?v=20261108-addbtn-1">
+    <link rel="stylesheet" href="css/style.css?v=20261121-messages-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -14,14 +14,15 @@
 
         <!-- Header -->
         <header class="header">
-            <div class="profile-section">
+            <a class="profile-section" href="settings.html" aria-label="Profile settings">
                 <div class="profile-avatar" id="profileAvatar"></div>
 
                 <div class="welcome-text">
                     <p id="greeting"></p>
                     <h2 id="userName"></h2>
                 </div>
-            </div>
+                <i class="fa-solid fa-chevron-right profile-chevron" aria-hidden="true"></i>
+            </a>
 
             <button class="notification-button" aria-label="Notifications">
                 <i class="fa-regular fa-bell"></i>
@@ -120,9 +121,9 @@
             Family
         </a>
 
-        <a href="settings.html">
-            <span><i class="fa-solid fa-gear"></i></span>
-            Settings
+        <a href="messages.html">
+            <span><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+            Messages
         </a>
 
     </nav>
