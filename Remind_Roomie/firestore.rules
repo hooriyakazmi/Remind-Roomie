@@ -17,11 +17,20 @@ service cloud.firestore {
       return /databases/$(database)/documents/households/$(householdId)/invitations/$(invitationId);
     }
 
+    function removalPath(uid, householdId) {
+      return /databases/$(database)/documents/users/$(uid)/householdRemovals/$(householdId);
+    }
+
     // Check current membership, never membership proposed by a pending write.
     function isMember(householdId) {
       return signedIn()
         && exists(profilePath(request.auth.uid))
         && get(profilePath(request.auth.uid)).data.householdId == householdId;
+    }
+
+    function isHouseholdHead(householdId) {
+      return isMember(householdId)
+        && get(householdPath(householdId)).data.createdBy == request.auth.uid;
     }
 
     function validMessage(data) {
@@ -108,9 +117,24 @@ service cloud.firestore {
         && get(path).data.householdId == householdId
         && get(path).data.email == request.auth.token.email
         && get(path).data.status == 'pending'
+        && invitationIsNewEnough(householdId, get(path).data.get('createdAt', null))
         && getAfter(path).data.status == 'accepted'
         && getAfter(path).data.acceptedBy == request.auth.uid
         && getAfter(path).data.acceptedAt == request.time;
+    }
+
+    function invitationIsNewEnough(householdId, createdAt) {
+      let path = removalPath(request.auth.uid, householdId);
+      return !exists(path) || createdAt > get(path).data.removedAt;
+    }
+
+    function canRemoveMember(uid, householdId) {
+      return signedIn() && uid != request.auth.uid
+        && householdId is string && isHouseholdHead(householdId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['householdId', 'invitationId'])
+        && request.resource.data.householdId == null
+        && request.resource.data.get('invitationId', null) == null
+        && getAfter(removalPath(uid, householdId)).data.removedAt == request.time;
     }
 
     match /users/{uid} {
@@ -138,7 +162,18 @@ service cloud.firestore {
           || canJoinInvitedHousehold(request.resource.data.householdId)
         );
 
+      allow update: if canRemoveMember(uid, resource.data.householdId);
+
       allow delete: if false;
+
+      match /householdRemovals/{householdId} {
+        allow create, update: if signedIn() && uid != request.auth.uid
+          && isHouseholdHead(householdId)
+          && get(profilePath(uid)).data.householdId == householdId
+          && getAfter(profilePath(uid)).data.householdId == null
+          && request.resource.data.keys().hasOnly(['removedAt'])
+          && request.resource.data.removedAt == request.time;
+      }
 
       match /imports/{householdId} {
         allow read: if signedIn() && request.auth.uid == uid && isMember(householdId);

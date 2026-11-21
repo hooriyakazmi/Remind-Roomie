@@ -31,6 +31,7 @@ async function backend(context) {
         localStorage.setItem('testEvents', JSON.stringify(events)); apply(events);
       },
       deleteEvent:async id => {
+        if (window.failEventDelete) throw new Error('Connection lost.');
         const events = cloud.events.filter(event => event.id !== id);
         localStorage.setItem('testEvents', JSON.stringify(events)); apply(events);
       }
@@ -105,6 +106,34 @@ test('Personal follows guest list even when the creator is excluded', async ({co
   await expect(page.locator('#dayEvents')).not.toContainText('Max invitation');
   await page.locator('[data-scope="shared"]').click();
   await expect(page.locator('#dayEvents')).toContainText('Max invitation');
+  await page.locator('#dayEvents').getByText('Max invitation').click();
+  await page.getByRole('button', { name: 'Edit event', exact: true }).click();
+  await page.locator('#editTitle').fill('Updated invitation');
+  await page.locator('#editEventForm').evaluate(form => form.requestSubmit());
+  await expect(max.locator('#dayEvents')).toContainText('Updated invitation');
+  await page.getByRole('button', { name: 'Delete event', exact: true }).click();
+  await page.locator('#confirmDelete').click();
+  await expect(max.locator('#dayEvents')).not.toContainText('Updated invitation');
+});
+
+test('the creator can delete a past event from its details and retry a failed deletion', async ({ context, page }) => {
+  await backend(context);
+  await open(page);
+  await create(page, 'Past appointment');
+  await page.locator('#eventDate').fill('2020-11-12');
+  await submit(page);
+  await page.getByRole('button', { name: 'Past Events' }).click();
+  await page.locator('#pastEvents').getByText('Past appointment').click();
+  const remove = page.getByRole('button', { name: 'Delete event', exact: true });
+  await expect(remove).toHaveText('Delete event');
+  await remove.click();
+  const confirmation = page.getByRole('dialog', { name: 'Delete event?' });
+  await page.evaluate(() => { window.failEventDelete = true; });
+  await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(confirmation.getByRole('alert')).toContainText('Could not delete this event');
+  await page.evaluate(() => { window.failEventDelete = false; });
+  await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.locator('#pastEvents')).toHaveText('No past events.');
 });
 
 test('Settings toggle includes tasks assigned to or by the user and updates an open calendar', async ({context, page}) => {

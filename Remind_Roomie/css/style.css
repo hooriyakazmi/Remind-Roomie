@@ -602,6 +602,11 @@ button {
     margin-top: 12px;
 }
 
+.task-detail-delete {
+    background: #f9eaea;
+    color: #9c2f2f;
+}
+
 .reject-task {
     background-color: white;
     color: #17675b;
@@ -878,6 +883,11 @@ button {
 #familyList .task-avatar {
     background-color: var(--member-profile-color, #e7d9f5);
     overflow: hidden;
+}
+
+#familyList .task-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 #familyList .task-avatar img {
@@ -1528,6 +1538,14 @@ button {
     color: #17675b;
 }
 
+.cal-edit-button-labeled {
+    width: auto;
+    padding: 0 12px;
+    border-radius: 18px;
+    color: #9c2f2f;
+    font-weight: 700;
+}
+
 .cal-hero-body {
     display: flex;
     align-items: center;
@@ -1764,6 +1782,49 @@ button {
 
 .cal-modal-card .cal-form-actions {
     margin-top: 18px;
+}
+
+.task-dialog,
+.family-remove-dialog {
+    width: calc(100% - 40px);
+    max-height: calc(100% - 40px);
+    margin: auto;
+    border: 0;
+}
+
+:is(.task-dialog, .family-remove-dialog)::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.task-dialog :is(input, textarea):focus-visible {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.task-edit-assignees {
+    min-width: 0;
+    padding: 10px 0 0;
+    border: 0;
+}
+
+.task-edit-assignees legend {
+    color: #555;
+    font-size: 12px;
+}
+
+.cal-modal-card .cal-delete-error {
+    margin-top: 8px;
+    color: #9c2f2f;
+}
+
+.cal-modal-card button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.family-remove-member {
+    flex-shrink: 0;
+    border-color: #9c2f2f;
 }
 
 .cal-danger {

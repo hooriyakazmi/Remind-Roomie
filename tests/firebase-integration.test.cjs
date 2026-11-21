@@ -41,6 +41,7 @@ function mockFirestore() {
     collection: (_db, ...parts) => parts.join('/'),
     doc: (_db, ...parts) => parts.join('/'),
     serverTimestamp: () => 'SERVER_TIMESTAMP',
+    deleteField: () => 'DELETE_FIELD',
     addDoc: async (ref, data) => { writes.push({ ref, data }); return { id: 'new-task' }; },
     updateDoc: async (ref, data) => { writes.push({ ref, data }); },
     setDoc: async (ref, data) => { stored.set(ref, data); },
@@ -49,6 +50,7 @@ function mockFirestore() {
     runTransaction: async (_db, operation) => operation({
       get: async ref => ({ exists: () => stored.has(ref), data: () => stored.get(ref) }),
       set: (ref, data) => { stored.set(ref, data); writes.push({ ref, data }); },
+      delete: ref => { stored.delete(ref); writes.push({ ref, deleted: true }); },
       update: (ref, changes) => {
         const next = { ...stored.get(ref) };
         for (const [key, value] of Object.entries(changes)) {
@@ -62,7 +64,11 @@ function mockFirestore() {
         writes.push({ ref, data: changes });
       }
     }),
-    onSnapshot: (ref, next, error) => { listeners.push({ ref, next, error }); return () => stopped++; },
+    onSnapshot: (ref, optionsOrNext, nextOrError, onError) => {
+      const basic = typeof optionsOrNext === 'function';
+      listeners.push({ ref, next: basic ? optionsOrNext : nextOrError, error: basic ? nextOrError : onError });
+      return () => stopped++;
+    },
     query: (ref, ...constraints) => ({ ref, constraints }),
     orderBy: (field, direction) => ({ field, direction }),
     limit: count => ({ count }),
@@ -144,7 +150,7 @@ test('direct chats use one ID for both participants and isolate subscriptions an
 test('task writes preserve scheduling, status and completion; listener forwards errors', async () => {
   const fake = mockFirestore();
   const tasks = await loadModule('firebase-tasks.js', fake.sdk);
-  assert.equal(await tasks.addTask('home', 'Trash', 'Alice', '2026-11-09', { time: '10:00' }), 'new-task');
+  assert.equal(await tasks.addTask('home', 'Trash', 'Alice', '2099-11-09', { time: '10:00' }), 'new-task');
   assert.equal(fake.writes[0].ref, 'households/home/tasks');
   assert.equal(fake.writes[0].data.time, '10:00');
   await tasks.setTaskCompleted('home', 'task', true);
@@ -161,6 +167,64 @@ test('task writes preserve scheduling, status and completion; listener forwards 
   assert.equal(error, 'permission-denied');
   stop();
   assert.equal(fake.stopped(), 1);
+});
+
+test('task assignment rejects past and invalid dates before writing, and accepts today or no date', async () => {
+  const fake = mockFirestore();
+  const tasks = await loadModule('firebase-tasks.js', fake.sdk);
+  const now = new Date();
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  await assert.rejects(tasks.addTask('home', 'Past', 'Alice', '2020-11-15'), /today or a future date/);
+  await assert.rejects(tasks.addTask('home', 'Past alias', 'Alice', today, { date: '2020-11-15' }), /today or a future date/);
+  await assert.rejects(tasks.addTask('home', 'Invalid', 'Alice', '2099-02-31'), /today or a future date/);
+  assert.equal(fake.writes.length, 0);
+  await tasks.addTask('home', 'Today', 'Alice', today);
+  await tasks.addTask('home', 'No date', 'Alice', '');
+  assert.deepEqual(fake.writes.map(write => write.data.dueDate), [today, '']);
+});
+
+test('deleting a task checks its latest completion state and accepts legacy completed records', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('firebase-household.js', fake.sdk, { window: { householdData: {} } });
+  const cloud = api.createHouseholdCloud('home', { uid: 'alice' }, () => {});
+  const task = 'households/home/tasks/one';
+  fake.stored.set(task, { status: 'accepted', completed: false });
+  await assert.rejects(cloud.deleteTask('one'), /Only the creator/);
+  assert.equal(fake.stored.has(task), true);
+  fake.stored.set(task, { completed: true });
+  await cloud.deleteTask('one');
+  assert.equal(fake.stored.has(task), false);
+  await cloud.deleteTask('one');
+  assert.deepEqual(fake.writes, [{ ref: task, deleted: true }]);
+  fake.stored.set(task, { status: 'completed' });
+  await cloud.deleteTask('one');
+  assert.equal(fake.stored.has(task), false);
+});
+
+test('task creators can edit an active task and delete it while other members cannot', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('firebase-household.js', fake.sdk, { window: { householdData: {} } });
+  const alice = api.createHouseholdCloud('home', { uid: 'alice' }, () => {});
+  const bob = api.createHouseholdCloud('home', { uid: 'bob' }, () => {});
+  alice.members = [{ id: 'alice', name: 'Allie', previousNames: ['Alice'] }, { id: 'bob', name: 'Bob' }];
+  bob.members = alice.members;
+  const path = 'households/home/tasks/one';
+  fake.stored.set(path, { assignedBy: 'Alice', memberIds: ['bob'], status: 'accepted', description: 'Old details' });
+  assert.equal(alice.isTaskCreator(fake.stored.get(path)), true);
+  assert.equal(bob.isTaskCreator({ ...fake.stored.get(path), assignedById: 'alice' }), false);
+  await assert.rejects(bob.editCreatedTask('one', { title: 'Other title' }), /Only the creator/);
+  await assert.rejects(bob.deleteTask('one'), /Only the creator/);
+  await alice.editCreatedTask('one', { title: 'Updated', details: '', date: '2030-04-20', time: '13:30' });
+  assert.equal(fake.stored.get(path).title, 'Updated');
+  assert.equal(fake.stored.get(path).description, '');
+  assert.equal(fake.stored.get(path).dueDate, '2030-04-20');
+  assert.equal(fake.stored.get(path).dueTime, '13:30');
+  assert.equal(fake.stored.get(path).status, 'accepted');
+  await alice.editCreatedTask('one', { memberIds: ['alice'] });
+  assert.equal(fake.stored.get(path).assignedTo, 'Allie');
+  assert.equal(fake.stored.get(path).status, 'requested');
+  await alice.deleteTask('one');
+  assert.equal(fake.stored.has(path), false);
 });
 
 test('accepting a task without an explanation records the response and updates task status atomically', async () => {
@@ -338,13 +402,16 @@ test('task details can complete an accepted task assigned to the current user', 
     page.listeners['roomie:tasks-updated']();
   };
   assert.equal(page.elements.get('taskDetailView').hidden, false);
-  const completionButton = page.elements.get('taskDetailCard').children.at(-1);
-  assert.equal(completionButton.textContent, 'Mark as complete');
+  const detail = page.elements.get('taskDetailCard');
+  const completionButton = detail.children.find(item => item.textContent === 'Mark as complete');
+  assert.ok(completionButton);
+  assert.ok(!detail.children.some(item => item.textContent === 'Delete task'));
   await completionButton.listeners.click();
   assert.equal(updates.length, 1);
   assert.equal(updates[0].id, 'task');
   assert.equal(updates[0].changes.status, 'completed');
-  assert.equal(page.elements.get('taskDetailCard').children.at(-1).textContent, 'Mark as incomplete');
+  assert.ok(detail.children.some(item => item.textContent === 'Mark as incomplete'));
+  assert.ok(detail.children.some(item => item.textContent === 'Delete task'));
 });
 
 test('home progress responds to snapshots and account-scoped personal events', async () => {
@@ -448,10 +515,10 @@ test('login retries profile failures and recovers an account missing its Firesto
   assert.equal(elements.get('householdSetup').hidden, true);
 });
 
-test('protected pages wait for the household and release listeners on sign-out', async () => {
+test('protected pages release listeners on sign-out and when household membership is removed', async () => {
   const fake = mockFirestore();
   fake.stored.set('users/alice', { displayName: 'Alice', householdId: 'home' });
-  fake.stored.set('households/home', { name: 'Home' });
+  fake.stored.set('households/home', { name: 'Home', createdBy: 'alice' });
   const elements = new Map(['accountName', 'signOutButton'].map(id => [id, new Element()]));
   const window = { householdData: {}, location: { replace: url => window.redirect = url }, addEventListener() {} };
   let authChanged;
@@ -467,13 +534,39 @@ test('protected pages wait for the household and release listeners on sign-out',
   await authChanged({ uid: 'alice' });
   const cloud = await window.roomieHouseholdReady;
   assert.equal(cloud.householdId, 'home');
+  assert.equal(cloud.headId, 'alice');
   assert.equal(window.householdData.user.name, 'Alice');
   assert.equal(elements.get('accountName').textContent, 'Alice');
-  assert.equal(fake.listeners.length, 3);
+  assert.equal(fake.listeners.length, 4);
   await elements.get('signOutButton').listeners.click();
   assert.equal(window.redirect, 'login.html');
   assert.equal(window.roomieCloud, null);
-  assert.equal(fake.stopped(), 3);
+  assert.equal(fake.stopped(), 4);
+  window.redirect = null;
+  await authChanged({ uid: 'alice' });
+  const profileListener = fake.listeners.at(-1);
+  assert.equal(profileListener.ref, 'users/alice');
+  const removed = { data: () => ({ householdId: null }) };
+  profileListener.next({ ...removed, metadata: { fromCache: true } });
+  assert.equal(window.redirect, null);
+  profileListener.next({ ...removed, metadata: { fromCache: false } });
+  assert.equal(window.redirect, 'login.html');
+  assert.equal(window.roomieCloud, null);
+  assert.equal(fake.stopped(), 8);
+});
+
+test('household removal batches only membership clearing and an invitation cutoff', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('firebase-household.js', fake.sdk, { window: { householdData: {} } });
+  const cloud = api.createHouseholdCloud('home', { uid: 'alice' }, () => {}, 'alice');
+  await cloud.removeMember('bob');
+  assert.equal(fake.writes.length, 2);
+  assert.equal(JSON.stringify(fake.writes[0]), JSON.stringify({
+    ref: 'users/bob', data: { householdId: null, invitationId: 'DELETE_FIELD' }
+  }));
+  assert.equal(JSON.stringify(fake.writes[1]), JSON.stringify({
+    ref: 'users/bob/householdRemovals/home', data: { removedAt: 'SERVER_TIMESTAMP' }
+  }));
 });
 
 test('protected page reports a failed household fetch without redirecting in a loop', async () => {

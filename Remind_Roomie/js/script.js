@@ -110,6 +110,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     // Tasks store their creator's account ID, so the name shown follows renames
     const assignedByName = task => (task.assignedById ? nameOf(task.assignedById) : task.assignedBy) || "Household";
 
+    function toISODate(date) {
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${date.getFullYear()}-${month}-${day}`;
+    }
+
     function taskDueDateTime(task) {
         const dueDate = task.date || task.dueDate;
         if (!dueDate) {
@@ -543,6 +549,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         const deletedStorageKey = storageKey("remindRoomieDeletedEvents");
         const deleteModal = document.getElementById("deleteModal");
         const deleteModalText = document.getElementById("deleteModalText");
+        const deleteEventError = document.getElementById("deleteEventError");
+        const cancelDeleteEvent = document.getElementById("cancelDelete");
+        const confirmDeleteEvent = document.getElementById("confirmDelete");
         const calendarView = document.getElementById("calendarView");
         const eventDetailView = document.getElementById("eventDetailView");
         const eventHero = document.getElementById("eventHero");
@@ -578,16 +587,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         let eventEdits = {};
         let deletedEventIds = [];
         let pendingDeleteId = null;
+        let deleteEventTrigger = null;
         let openEventId = null;
         let editingEvent = false;
         let scope = "personal";
         const requestedEventId = new URLSearchParams(window.location.search).get("event");
-
-        function toISODate(date) {
-            const month = String(date.getMonth() + 1).padStart(2, "0");
-            const day = String(date.getDate()).padStart(2, "0");
-            return `${date.getFullYear()}-${month}-${day}`;
-        }
 
         // Today is read every time the page loads, so the ring moves to the new day
         const today = new Date();
@@ -1127,8 +1131,13 @@ document.addEventListener("DOMContentLoaded", async function () {
                 deleteButton.type = "button";
                 deleteButton.className = "cal-edit-button";
                 deleteButton.setAttribute("aria-label", "Delete event");
-                deleteButton.innerHTML = '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';
-                deleteButton.addEventListener("click", () => openDeleteModal(event.id));
+                if (event.date < todayISO) {
+                    deleteButton.classList.add("cal-edit-button-labeled");
+                    deleteButton.textContent = "Delete event";
+                } else {
+                    deleteButton.innerHTML = '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';
+                }
+                deleteButton.addEventListener("click", () => openDeleteModal(event.id, deleteButton));
 
                 actions.append(editButton, deleteButton);
                 top.append(actions);
@@ -1185,51 +1194,56 @@ document.addEventListener("DOMContentLoaded", async function () {
             renderDetailRows(eventDetailCard, rows);
         }
 
-        function openDeleteModal(id) {
+        function openDeleteModal(id, trigger) {
             const event = allEvents().find(item => item.id === id);
             if (!event) {
                 return;
             }
             pendingDeleteId = id;
+            deleteEventTrigger = trigger;
             deleteModalText.textContent = `Are you sure you want to delete "${event.title}"? This can't be undone.`;
+            deleteEventError.hidden = true;
             deleteModal.hidden = false;
-            document.getElementById("cancelDelete").focus();
+            cancelDeleteEvent.focus();
         }
 
         function closeDeleteModal() {
+            if (confirmDeleteEvent.disabled) return;
             pendingDeleteId = null;
             deleteModal.hidden = true;
+            deleteEventTrigger?.focus();
+            deleteEventTrigger = null;
         }
 
-        document.getElementById("cancelDelete").addEventListener("click", closeDeleteModal);
+        cancelDeleteEvent.addEventListener("click", closeDeleteModal);
 
-        document.getElementById("confirmDelete").addEventListener("click", async () => {
-            const remoteEvent = householdData.calendar.shared.find(event => event.id === pendingDeleteId);
-            if (remoteEvent) {
-                try {
-                    await window.roomieCloud.deleteEvent(remoteEvent.id);
-                    closeDeleteModal();
-                    showCalendarView();
-                } catch (error) {
-                    console.error("Could not delete the shared event.", error);
-                    showCalendarView();
-                    window.roomieCloud.reportError(error);
-                }
-                return;
-            }
-
-            const nextDeleted = [...deletedEventIds, pendingDeleteId];
+        confirmDeleteEvent.addEventListener("click", async () => {
+            if (confirmDeleteEvent.disabled || pendingDeleteId === null) return;
+            const event = allEvents().find(item => item.id === pendingDeleteId);
+            confirmDeleteEvent.disabled = true;
+            cancelDeleteEvent.disabled = true;
+            deleteEventError.hidden = true;
             try {
-                localStorage.setItem(deletedStorageKey, JSON.stringify(nextDeleted));
+                if (event?._remote) {
+                    await window.roomieCloud.deleteEvent(event.id);
+                } else if (event) {
+                    const nextDeleted = [...deletedEventIds, event.id];
+                    localStorage.setItem(deletedStorageKey, JSON.stringify(nextDeleted));
+                    deletedEventIds = nextDeleted;
+                }
             } catch (error) {
-                console.error("Could not save the deleted event.", error);
-                closeDeleteModal();
+                console.error("Could not delete the event.", error);
+                deleteEventError.textContent = "Could not delete this event. Please try again.";
+                deleteEventError.hidden = false;
                 return;
+            } finally {
+                confirmDeleteEvent.disabled = false;
+                cancelDeleteEvent.disabled = false;
             }
 
-            deletedEventIds = nextDeleted;
             closeDeleteModal();
             showCalendarView();
+            (event?.date < todayISO ? togglePastEventsButton : addEventButton).focus();
         });
 
         deleteModal.addEventListener("click", clickEvent => {
@@ -1701,6 +1715,23 @@ document.addEventListener("DOMContentLoaded", async function () {
         const newTaskDate = document.getElementById("newTaskDate");
         const newTaskTime = document.getElementById("newTaskTime");
         const newTaskMessage = document.getElementById("newTaskMessage");
+        const editTaskDialog = document.getElementById("editTaskDialog");
+        const editTaskForm = document.getElementById("editTaskForm");
+        const editTaskAssignees = document.getElementById("editTaskAssignees");
+        const editTaskError = document.getElementById("editTaskError");
+        const cancelEditTask = document.getElementById("cancelEditTask");
+        const saveTaskChanges = document.getElementById("saveTaskChanges");
+        const taskEditFields = {
+            title: document.getElementById("editTaskTitle"),
+            details: document.getElementById("editTaskDetails"),
+            date: document.getElementById("editTaskDate"),
+            time: document.getElementById("editTaskTime")
+        };
+        const deleteTaskDialog = document.getElementById("deleteTaskDialog");
+        const deleteTaskText = document.getElementById("deleteTaskText");
+        const deleteTaskError = document.getElementById("deleteTaskError");
+        const cancelDeleteTask = document.getElementById("cancelDeleteTask");
+        const confirmDeleteTask = document.getElementById("confirmDeleteTask");
         let familyMembers = [...householdData.family];
         let assignedTasks = [];
         let feedback = null;
@@ -1709,6 +1740,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         let loadError = "";
         let allTasksExpanded = false;
         let pastTasksExpanded = false;
+        let taskToDelete = null;
+        let taskEdit = null;
 
         function memberId(member, index) {
             return member.id || `member-${index}`;
@@ -2104,6 +2137,29 @@ document.addEventListener("DOMContentLoaded", async function () {
             renderTasks();
         }
 
+        function openTaskEditor(task) {
+            const due = new Date(taskDueDateTime(task));
+            const time = String(task.time || task.dueTime || "");
+            const date = Number.isFinite(due.getTime())
+                ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`
+                : "";
+            const values = {
+                title: task.title,
+                details: task.details || task.description || "",
+                date,
+                time: time ? time.padStart(5, "0") : ""
+            };
+            for (const [key, field] of Object.entries(taskEditFields)) field.value = values[key];
+            const assignedNames = Array.isArray(task.assignedTo) ? task.assignedTo : String(task.assignedTo || "").split(",");
+            const memberIds = task.memberIds?.length ? task.memberIds
+                : assignedNames.some(name => name.trim() === "Household") ? familyMembers.map(member => member.id)
+                    : taskAssignees(task).map(member => member.id);
+            renderAssigneeOptions(memberIds, editTaskAssignees);
+            taskEdit = { id: task.id, initial: new FormData(editTaskForm) };
+            editTaskError.hidden = true;
+            editTaskDialog.showModal();
+        }
+
         function renderTaskDetail() {
             const task = allTasks().find(item => item.id === openTaskId);
             if (!task) {
@@ -2150,6 +2206,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             );
             renderDetailRows(taskDetailCard, rows);
 
+            const isCreator = window.roomieCloud.isTaskCreator?.(task);
+            if (isCreator) {
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.className = "task-action-button reject-task task-detail-completion";
+                editButton.textContent = "Edit task";
+                editButton.addEventListener("click", () => openTaskEditor(task));
+                taskDetailCard.append(editButton);
+            }
+
             if (isAssignedToCurrentUser(task) && ["accepted", "completed"].includes(normalizedStatus)) {
                 const completionButton = document.createElement("button");
                 completionButton.type = "button";
@@ -2159,6 +2225,20 @@ document.addEventListener("DOMContentLoaded", async function () {
                     updateTask(task, { status: normalizedStatus === "completed" ? "accepted" : "completed" });
                 });
                 taskDetailCard.append(completionButton);
+            }
+
+            if (isCreator || normalizedStatus === "completed") {
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "task-action-button task-detail-completion task-detail-delete";
+                deleteButton.textContent = "Delete task";
+                deleteButton.addEventListener("click", () => {
+                    taskToDelete = task;
+                    deleteTaskText.textContent = `Delete "${task.title}" for everyone in the household? This can't be undone.`;
+                    deleteTaskError.hidden = true;
+                    deleteTaskDialog.showModal();
+                });
+                taskDetailCard.append(deleteButton);
             }
 
             if (loadError) {
@@ -2272,8 +2352,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
         }
 
-        function renderAssigneeOptions(selectedIds = []) {
-            taskAssigneeOptions.replaceChildren();
+        function renderAssigneeOptions(selectedIds = [], container = taskAssigneeOptions) {
+            container.replaceChildren();
             familyMembers.forEach((member, index) => {
                 const label = document.createElement("label");
                 label.className = "task-assignee-option";
@@ -2286,7 +2366,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const name = document.createElement("span");
                 name.textContent = member.name;
                 label.append(checkbox, name);
-                taskAssigneeOptions.append(label);
+                container.append(label);
             });
         }
 
@@ -2312,6 +2392,79 @@ document.addEventListener("DOMContentLoaded", async function () {
             renderTasks();
         });
         document.getElementById("backFromTaskDetails").addEventListener("click", closeTaskDetail);
+        cancelEditTask.addEventListener("click", () => editTaskDialog.close());
+        editTaskDialog.addEventListener("cancel", event => {
+            if (saveTaskChanges.disabled) event.preventDefault();
+        });
+        editTaskForm.addEventListener("submit", async event => {
+            event.preventDefault();
+            if (saveTaskChanges.disabled || !taskEdit) return;
+            editTaskError.hidden = true;
+            const data = new FormData(editTaskForm);
+            const changes = {};
+            for (const key of Object.keys(taskEditFields)) {
+                if (data.get(key) !== taskEdit.initial.get(key)) changes[key] = data.get(key).trim();
+            }
+            if (changes.title === "") {
+                editTaskError.textContent = "Enter a task name.";
+                editTaskError.hidden = false;
+                taskEditFields.title.focus();
+                return;
+            }
+            const memberIds = data.getAll("assignees");
+            const initialAssignees = taskEdit.initial.getAll("assignees");
+            if (memberIds.length !== initialAssignees.length || memberIds.some(id => !initialAssignees.includes(id))) {
+                if (!memberIds.length) {
+                    editTaskError.textContent = "Select at least one household member.";
+                    editTaskError.hidden = false;
+                    return;
+                }
+                changes.memberIds = memberIds;
+            }
+            if (!Object.keys(changes).length) {
+                editTaskDialog.close();
+                return;
+            }
+
+            saveTaskChanges.disabled = true;
+            cancelEditTask.disabled = true;
+            try {
+                await window.roomieCloud.editCreatedTask(taskEdit.id, changes);
+                editTaskDialog.close();
+            } catch (error) {
+                console.error("Could not edit the task.", error);
+                editTaskError.textContent = "Could not save your changes. Please try again.";
+                editTaskError.hidden = false;
+            } finally {
+                saveTaskChanges.disabled = false;
+                cancelEditTask.disabled = false;
+            }
+        });
+        deleteTaskDialog.addEventListener("cancel", event => {
+            if (confirmDeleteTask.disabled) event.preventDefault();
+        });
+        confirmDeleteTask.addEventListener("click", async () => {
+            if (confirmDeleteTask.disabled || !taskToDelete) return;
+            const task = taskToDelete;
+            confirmDeleteTask.disabled = true;
+            cancelDeleteTask.disabled = true;
+            deleteTaskError.hidden = true;
+            try {
+                await window.roomieCloud.deleteTask(task.id);
+            } catch (error) {
+                console.error("Could not delete the task.", error);
+                deleteTaskError.textContent = "Could not delete this task. Please try again.";
+                deleteTaskError.hidden = false;
+                return;
+            } finally {
+                confirmDeleteTask.disabled = false;
+                cancelDeleteTask.disabled = false;
+            }
+            assignedTasks = assignedTasks.filter(item => item.id !== task.id);
+            deleteTaskDialog.close();
+            closeTaskDetail();
+            (isTaskPastDue(task) ? togglePastTasksButton : toggleAllTasksButton).focus();
+        });
         togglePastTasksButton.addEventListener("click", () => {
             pastTasksExpanded = !pastTasksExpanded;
             pastTasksList.hidden = !pastTasksExpanded;
@@ -2324,10 +2477,38 @@ document.addEventListener("DOMContentLoaded", async function () {
             toggleAllTasksButton.setAttribute("aria-expanded", String(allTasksExpanded));
         });
 
+        const taskDateError = "Choose today or a future date.";
+        function updateNewTaskDateMinimum() {
+            newTaskDate.min = toISODate(new Date());
+        }
+
+        function showNewTaskDateError() {
+            newTaskMessage.textContent = taskDateError;
+            newTaskMessage.hidden = false;
+        }
+
+        updateNewTaskDateMinimum();
+        addTaskButton.addEventListener("click", updateNewTaskDateMinimum);
+        newTaskDate.addEventListener("focus", updateNewTaskDateMinimum);
+        newTaskDate.addEventListener("invalid", () => {
+            updateNewTaskDateMinimum();
+            if (newTaskDate.value && newTaskDate.value < newTaskDate.min) showNewTaskDateError();
+        });
+        newTaskDate.addEventListener("input", () => {
+            if (newTaskMessage.textContent === taskDateError) newTaskMessage.hidden = true;
+        });
+
         addTaskForm.addEventListener("submit", async event => {
             event.preventDefault();
             newTaskMessage.hidden = true;
             const title = newTaskTitle.value.trim();
+            const date = newTaskDate.value;
+            updateNewTaskDateMinimum();
+            if (date && date < newTaskDate.min) {
+                showNewTaskDateError();
+                newTaskDate.focus();
+                return;
+            }
             const memberIds = [...taskAssigneeOptions.querySelectorAll('input[name="assignees"]:checked')]
                 .map(input => input.value);
             if (!title) {
@@ -2347,11 +2528,11 @@ document.addEventListener("DOMContentLoaded", async function () {
                     .map(member => member.name)
                     .join(", ");
             try {
-                await window.roomieCloud.addTask(title, assignedTo, newTaskDate.value, {
+                await window.roomieCloud.addTask(title, assignedTo, date, {
                     memberIds,
                     assignedBy: householdData.user.name,
-                assignedById: meId,
-                    date: newTaskDate.value,
+                    assignedById: meId,
+                    date,
                     time: newTaskTime.value,
                     status: "requested"
                 });
@@ -2481,12 +2662,19 @@ document.addEventListener("DOMContentLoaded", async function () {
     const familyList = document.getElementById("familyList");
 
     if (familyList) {
+        const cloud = window.roomieCloud;
         const memberForm = document.getElementById("memberForm");
         const addMemberButton = document.getElementById("addMemberButton");
         const memberEmail = document.getElementById("memberEmail");
         const familyMessage = document.getElementById("familyMessage");
-        let familyMembers = window.roomieCloud.members.length
-            ? [...window.roomieCloud.members]
+        const removeMemberDialog = document.getElementById("removeMemberDialog");
+        const removeMemberText = document.getElementById("removeMemberText");
+        const removeMemberError = document.getElementById("removeMemberError");
+        const cancelRemoveMember = document.getElementById("cancelRemoveMember");
+        const confirmRemoveMember = document.getElementById("confirmRemoveMember");
+        let memberToRemove = null;
+        let familyMembers = cloud.members.length
+            ? [...cloud.members]
             : [...householdData.family];
 
         function showFamilyMessage(message) {
@@ -2512,17 +2700,57 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const name = document.createElement("h4");
                 name.textContent = member.name;
                 info.append(name);
-                if (member.role) {
+                const isHead = member.id === cloud.headId;
+                const roleText = isHead ? (member.id === meId ? "Head of family · You" : "Head of family") : member.role;
+                if (roleText) {
                     const role = document.createElement("p");
-                    role.textContent = member.role;
+                    role.textContent = roleText;
                     info.append(role);
                 }
                 card.append(avatar, info);
+                if (cloud.headId === meId && member.id !== meId) {
+                    const remove = document.createElement("button");
+                    remove.className = "task-action-button task-detail-delete family-remove-member";
+                    remove.type = "button";
+                    remove.textContent = "Remove";
+                    remove.setAttribute("aria-label", `Remove ${member.name}`);
+                    remove.addEventListener("click", () => {
+                        memberToRemove = member;
+                        removeMemberText.textContent = `Remove ${member.name} from your family circle? They’ll lose access to the household.`;
+                        removeMemberError.hidden = true;
+                        removeMemberDialog.showModal();
+                    });
+                    card.append(remove);
+                }
                 familyList.append(card);
             });
         }
 
         renderFamilyMembers();
+
+        removeMemberDialog.addEventListener("cancel", event => {
+            if (confirmRemoveMember.disabled) event.preventDefault();
+        });
+        confirmRemoveMember.addEventListener("click", async () => {
+            if (!memberToRemove || confirmRemoveMember.disabled) return;
+            const member = memberToRemove;
+            removeMemberError.hidden = true;
+            cancelRemoveMember.disabled = true;
+            confirmRemoveMember.disabled = true;
+            try {
+                await cloud.removeMember(member.id);
+                removeMemberDialog.close();
+                showFamilyMessage(`${member.name} was removed from your family circle.`);
+                addMemberButton.focus();
+            } catch (error) {
+                console.error("Could not remove the household member.", error);
+                removeMemberError.textContent = "Could not remove this member. Please try again.";
+                removeMemberError.hidden = false;
+            } finally {
+                cancelRemoveMember.disabled = false;
+                confirmRemoveMember.disabled = false;
+            }
+        });
 
         memberForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -2542,7 +2770,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
 
         window.addEventListener("roomie:members-updated", () => {
-            familyMembers = [...window.roomieCloud.members];
+            familyMembers = [...cloud.members];
             householdData.family = familyMembers;
             renderFamilyMembers();
         });
