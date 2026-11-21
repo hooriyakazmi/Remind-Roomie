@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remind Roomie - Messages</title>
+    <link rel="stylesheet" href="css/style.css?v=20261121-messages-5">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
+<body>
+    <main class="container messages-page" id="messagesPage">
+        <section id="chatInbox">
+            <header class="page-header chat-inbox-header">
+                <h1 id="inboxTitle" tabindex="-1">Messages</h1>
+                <button class="primary-button" id="newGroupChat" type="button" disabled>
+                    <span aria-hidden="true">+</span> New group
+                </button>
+            </header>
+            <p class="thread-status" id="inboxStatus" role="status">Loading conversations…</p>
+            <p class="settings-message is-error" id="directChatError" role="alert" hidden></p>
+            <ul class="chat-list" id="chatList" aria-label="Conversations"></ul>
+            <p class="form-help chat-empty-members" id="noDirectMembers" hidden>Invite a household member to start a direct message.</p>
+        </section>
+
+        <section id="newChatPage" hidden>
+            <button class="chat-back" type="button" data-back-to-messages>← Back to Messages</button>
+            <header class="page-header">
+                <h1 id="newChatTitle" tabindex="-1">New group</h1>
+            </header>
+            <form class="new-chat-form" id="newChatForm">
+                <label>
+                    Group name
+                    <input id="groupName" type="text" maxlength="60" required>
+                </label>
+                <fieldset>
+                    <legend>Choose 2 to 9 household members</legend>
+                    <div id="chatRecipients" class="chat-recipients"></div>
+                </fieldset>
+                <p class="settings-message is-error" id="newChatError" role="alert" hidden></p>
+                <button class="primary-button" type="submit">Create group</button>
+            </form>
+        </section>
+
+        <section class="chat-view" id="chatView" hidden>
+            <header class="conversation-header">
+                <button class="chat-back conversation-back" type="button" data-back-to-messages aria-label="Back to Messages">
+                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                </button>
+                <span class="conversation-avatar" id="chatAvatar" aria-hidden="true"></span>
+                <div class="conversation-identity">
+                    <h1 id="chatTitle" tabindex="-1"></h1>
+                    <button class="conversation-subtitle" id="chatParticipants" type="button" aria-haspopup="dialog"></button>
+                </div>
+                <button class="conversation-icon-button" id="chatDetailsButton" type="button" aria-label="Conversation details" aria-haspopup="dialog">
+                    <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+                </button>
+            </header>
+            <section class="message-thread" id="messageThread" aria-label="Chat history" tabindex="0">
+                <button class="older-messages" id="olderMessages" type="button" hidden>Load earlier messages</button>
+                <p class="thread-status" id="threadStatus" role="status"></p>
+                <ol class="message-list" id="messageList" aria-label="Messages in chronological order"></ol>
+            </section>
+
+            <form class="message-form" id="messageForm">
+                <label class="visually-hidden" for="messageText">Message</label>
+                <div class="message-input-row">
+                    <button class="conversation-icon-button message-more" id="messageExtras" type="button" aria-label="Add to message" popovertarget="messageExtrasPanel" disabled>
+                        <span aria-hidden="true">+</span>
+                    </button>
+                    <textarea id="messageText" rows="1" maxlength="1000" placeholder="Text message" required disabled></textarea>
+                    <button class="primary-button message-send" type="submit" aria-label="Send" disabled>
+                        <i class="fa-regular fa-paper-plane" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="message-extras-panel" id="messageExtrasPanel" popover aria-label="Add an emoji">
+                    <button type="button" data-emoji="👍" aria-label="Thumbs up">👍</button>
+                    <button type="button" data-emoji="😊" aria-label="Smile">😊</button>
+                    <button type="button" data-emoji="❤️" aria-label="Heart">❤️</button>
+                    <button type="button" data-emoji="🎉" aria-label="Celebration">🎉</button>
+                </div>
+                <p class="settings-message is-error" id="messageError" role="alert" hidden></p>
+                <p class="conversation-privacy" id="chatPrivacy"></p>
+            </form>
+        </section>
+
+        <dialog class="conversation-details" id="chatDetails" aria-labelledby="chatDetailsTitle">
+            <h2 id="chatDetailsTitle">Conversation details</h2>
+            <ul id="chatDetailsMembers"></ul>
+            <form method="dialog">
+                <button class="primary-button">Done</button>
+            </form>
+        </dialog>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+        <a href="index.html">
+            <span><i class="fa-solid fa-house" aria-hidden="true"></i></span>
+            Home
+        </a>
+        <a href="calendar.html">
+            <span><i class="fa-solid fa-calendar-days" aria-hidden="true"></i></span>
+            Calendar
+        </a>
+        <a href="tasks.html">
+            <span><i class="fa-solid fa-list-check" aria-hidden="true"></i></span>
+            Tasks
+        </a>
+        <a href="family.html">
+            <span><i class="fa-solid fa-users" aria-hidden="true"></i></span>
+            Family
+        </a>
+        <a href="messages.html" class="active" aria-current="page">
+            <span><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+            Messages
+        </a>
+    </nav>
+
+    <script src="js/data.js?v=20261108-addbtn-1"></script>
+    <script src="js/script.js?v=20261121-messages-1"></script>
+</body>
+</html>

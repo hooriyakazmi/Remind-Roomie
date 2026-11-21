@@ -63,8 +63,10 @@ function mockFirestore() {
       }
     }),
     onSnapshot: (ref, next, error) => { listeners.push({ ref, next, error }); return () => stopped++; },
-    query: ref => ref,
-    where: () => {},
+    query: (ref, ...constraints) => ({ ref, constraints }),
+    orderBy: (field, direction) => ({ field, direction }),
+    limit: count => ({ count }),
+    where: (field, operator, value) => ({ field, operator, value }),
     writeBatch: () => {
       const pending = [];
       return {
@@ -81,6 +83,63 @@ function storage(initial = {}) {
   const entries = new Map(Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)]));
   return { getItem: k => entries.get(k) ?? null, setItem: (k, v) => entries.set(k, v) };
 }
+
+test('household chat listens in chronological order and writes authenticated, trimmed messages', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('firebase-household.js', fake.sdk, { window: { householdData: {} } });
+  const cloud = api.createHouseholdCloud('home', { uid: 'bob' }, () => {});
+  let received;
+  const stop = cloud.watchMessages(null, 51, messages => received = messages, () => {});
+  const listener = fake.listeners.at(-1);
+  assert.deepEqual(listener.ref, {
+    ref: 'households/home/messages',
+    constraints: [{ field: 'createdAt', direction: 'desc' }, { count: 51 }]
+  });
+  listener.next({ docs: [
+    { id: 'second', data: () => ({ text: 'Second' }) },
+    { id: 'first', data: () => ({ text: 'First' }) }
+  ] });
+  assert.equal(received.map(message => message.id).join(','), 'first,second');
+  await assert.rejects(cloud.sendMessage(null, '   '));
+  await assert.rejects(cloud.sendMessage(null, 'x'.repeat(1001)));
+  await cloud.sendMessage(null, '  Thanks!  ');
+  assert.equal(fake.writes.length, 1);
+  assert.equal(fake.writes[0].ref, 'households/home/messages');
+  assert.equal(fake.writes[0].data.senderId, 'bob');
+  assert.equal(fake.writes[0].data.text, 'Thanks!');
+  assert.equal(fake.writes[0].data.createdAt, 'SERVER_TIMESTAMP');
+  stop();
+  assert.equal(fake.stopped(), 1);
+});
+
+test('direct chats use one ID for both participants and isolate subscriptions and messages', async () => {
+  const fake = mockFirestore();
+  const save = fake.sdk.setDoc;
+  fake.sdk.setDoc = async (ref, data) => {
+    if (fake.stored.has(ref)) throw Object.assign(new Error('Already created'), { code: 'permission-denied' });
+    await save(ref, data);
+  };
+  const api = await loadModule('firebase-household.js', fake.sdk, { window: { householdData: {} } });
+  const alice = api.createHouseholdCloud('home', { uid: 'alice' }, () => {});
+  const bob = api.createHouseholdCloud('home', { uid: 'bob' }, () => {});
+  const chat = await alice.createChat('direct', ['bob']);
+  const path = 'households/home/chats/dm_5_alicebob';
+  const sameChat = await bob.createChat('direct', ['alice']);
+  assert.equal(sameChat.id, chat.id);
+  assert.equal(sameChat.createdBy, 'alice');
+  assert.equal(fake.stored.size, 1);
+
+  bob.watchChats(() => {}, () => {});
+  assert.deepEqual(fake.listeners.at(-1).ref, {
+    ref: 'households/home/chats',
+    constraints: [{ field: 'memberIds', operator: 'array-contains', value: 'bob' }]
+  });
+  alice.watchMessages(chat.id, 51, () => {}, () => {});
+  assert.equal(fake.listeners.at(-1).ref.ref, path + '/messages');
+  await bob.sendMessage(chat.id, 'Private reply');
+  assert.equal(fake.writes.at(-1).ref, path + '/messages');
+  assert.equal(fake.writes.at(-1).data.senderId, 'bob');
+});
 
 test('task writes preserve scheduling, status and completion; listener forwards errors', async () => {
   const fake = mockFirestore();
@@ -104,7 +163,7 @@ test('task writes preserve scheduling, status and completion; listener forwards 
   assert.equal(fake.stopped(), 1);
 });
 
-test('accepting a task records the explanation and updates task status atomically', async () => {
+test('accepting a task without an explanation records the response and updates task status atomically', async () => {
   const fake = mockFirestore();
   fake.stored.set('households/home/tasks/one', {
     title: 'Dishes', memberIds: ['alice'], assignedById: 'bob',
@@ -116,14 +175,14 @@ test('accepting a task records the explanation and updates task status atomicall
   });
 
   const result = await api.respondToTask('home', 'one', { uid: 'alice' }, [], {
-    action: 'accepted', reason: '  I can take care of it.  '
+    action: 'accepted'
   });
   const saved = fake.stored.get('households/home/tasks/one');
 
   assert.equal(saved.status, 'accepted');
   assert.equal(saved.completed, false);
   assert.equal(saved.responses['response-1'].action, 'accepted');
-  assert.equal(saved.responses['response-1'].reason, 'I can take care of it.');
+  assert.equal(saved.responses['response-1'].reason, '');
   assert.equal(saved.responses['response-1'].recipientId, 'bob');
   assert.equal(result.status, 'accepted');
   assert.equal(fake.writes.length, 1);
@@ -264,7 +323,8 @@ test('task page renders one card per cloud task and recognizes UID assignees', a
   await accept.listeners.click();
   const form = page.elements.get('taskRequests').children[0].children.at(-1);
   assert.equal(form.className, 'task-response-form');
-  assert.equal(form.children[0].textContent, 'Why are you accepting this task?');
+  assert.equal(form.querySelectorAll('*').some(child => child.tag === 'textarea'), false);
+  assert.ok(form.children.some(child => child.textContent === 'Send acceptance'));
 });
 
 test('task details can complete an accepted task assigned to the current user', async () => {

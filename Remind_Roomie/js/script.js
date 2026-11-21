@@ -27,8 +27,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (window.roomieCloud) {
         await window.roomieCloud.membersReady;
     }
+    const onMessagesPage = Boolean(document.getElementById("messagesPage"));
+    if (onMessagesPage) {
+        const { initMessages } = await import("./messages.js");
+        initMessages(window.roomieCloud);
+    }
     window.roomieAppState = window.roomieCloud ? "ready" : "unavailable";
-    if (!window.roomieCloud) return;
+    if (!window.roomieCloud || onMessagesPage) return;
 
     const storageKey = key => `${key}:${window.roomieCloud.user.uid}`;
 
@@ -1934,7 +1939,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                     action, error: "", busy: false
                 });
                 renderTasks();
-                document.getElementById(`response-reason-${task.id}`)?.focus();
+                const field = action === "accepted" ? "submit" : "reason";
+                document.getElementById(`response-${field}-${task.id}`)?.focus();
             }
 
             const rescheduleButton = document.createElement("button");
@@ -1954,6 +1960,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         function createResponseForm(task, draft) {
             const form = document.createElement("form");
             form.className = "task-response-form";
+            const accepting = draft.action === "accepted";
             const rescheduling = draft.action === "rescheduled";
             if (rescheduling) {
                 [["date", "New due date"], ["time", "New due time"]].forEach(([type, text]) => {
@@ -1971,25 +1978,27 @@ document.addEventListener("DOMContentLoaded", async function () {
                 });
             }
 
-            const reasonLabel = document.createElement("label");
-            reasonLabel.className = "task-response-reason";
-            reasonLabel.textContent = draft.action === "accepted"
-                ? "Why are you accepting this task?"
-                : rescheduling ? "Why are you rescheduling?" : "Why are you rejecting this task?";
-            const reason = document.createElement("textarea");
-            reason.id = `response-reason-${task.id}`;
-            reason.required = true;
-            reason.maxLength = 1000;
-            reason.rows = 3;
-            reason.value = draft.reason;
-            reason.disabled = draft.busy;
-            reason.placeholder = "Explain your reason to the person who assigned this task.";
-            reason.addEventListener("input", () => { draft.reason = reason.value; });
-            reasonLabel.append(reason);
+            let reason;
+            if (!accepting) {
+                const reasonLabel = document.createElement("label");
+                reasonLabel.className = "task-response-reason";
+                reasonLabel.textContent = rescheduling ? "Why are you rescheduling?" : "Why are you rejecting this task?";
+                reason = document.createElement("textarea");
+                reason.id = `response-reason-${task.id}`;
+                reason.required = true;
+                reason.maxLength = 1000;
+                reason.rows = 3;
+                reason.value = draft.reason;
+                reason.disabled = draft.busy;
+                reason.placeholder = "Explain your reason to the person who assigned this task.";
+                reason.addEventListener("input", () => { draft.reason = reason.value; });
+                reasonLabel.append(reason);
 
-            const help = document.createElement("p");
-            help.className = "form-help task-response-help";
-            help.textContent = `Your explanation will be sent to ${nameOf(task.assignedById || task.assignedBy) || "the person who assigned this task"} in Task responses.`;
+                const help = document.createElement("p");
+                help.className = "form-help task-response-help";
+                help.textContent = `Your explanation will be sent to ${nameOf(task.assignedById || task.assignedBy) || "the person who assigned this task"} in Task responses.`;
+                form.append(reasonLabel, help);
+            }
             const error = document.createElement("p");
             error.className = "family-message task-response-error";
             error.setAttribute("role", "alert");
@@ -1997,9 +2006,10 @@ document.addEventListener("DOMContentLoaded", async function () {
             error.textContent = draft.error;
             const send = document.createElement("button");
             send.type = "submit";
+            send.id = `response-submit-${task.id}`;
             send.className = "task-action-button accept-task";
             send.textContent = draft.busy ? "Sending…" : rescheduling ? "Save new time"
-                : draft.action === "accepted" ? "Send acceptance" : "Send rejection";
+                : accepting ? "Send acceptance" : "Send rejection";
             send.disabled = draft.busy;
             const cancel = document.createElement("button");
             cancel.type = "button";
@@ -2007,12 +2017,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             cancel.textContent = "Cancel";
             cancel.disabled = draft.busy;
             cancel.addEventListener("click", () => { responseDrafts.delete(task.id); renderTasks(); });
-            form.append(reasonLabel, help, error, send, cancel);
+            form.append(error, send, cancel);
             form.addEventListener("submit", async event => {
                 event.preventDefault();
                 if (draft.busy) return;
-                draft.reason = reason.value;
-                if (!draft.reason.trim() || draft.reason.trim().length > 1000) {
+                const explanation = reason?.value.trim() ?? "";
+                if (reason && (!explanation || explanation.length > 1000)) {
                     draft.error = "Enter an explanation between 1 and 1000 characters.";
                     error.textContent = draft.error;
                     error.hidden = false;
@@ -2024,7 +2034,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 renderTasks();
                 try {
                     const result = await window.roomieCloud.respondToTask(task.id, {
-                        action: draft.action, reason: draft.reason,
+                        action: draft.action, reason: explanation,
                         ...(rescheduling ? { date: draft.date, time: draft.time } : {})
                     });
                     responseDrafts.delete(task.id);
@@ -2037,7 +2047,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 } catch (error) {
                     console.error("Could not send the task response.", error);
                     draft.busy = false;
-                    draft.error = "Could not send your explanation. " + (error.code === "permission-denied"
+                    draft.error = (accepting ? "Could not send your acceptance. " : "Could not send your explanation. ") + (error.code === "permission-denied"
                         ? "Check your household access and try again."
                         : error.message || "Please try again.");
                     loadError = draft.error;
@@ -2062,10 +2072,13 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const verb = note.action === "accepted" ? "accepted"
                     : note.action === "rejected" ? "rejected" : "rescheduled";
                 title.textContent = `${nameOf(note.senderId)} ${verb} “${note.task.title}”`;
-                const reason = document.createElement("p");
-                reason.className = "task-response-text";
-                reason.textContent = note.reason;
-                card.append(title, reason);
+                card.append(title);
+                if (note.reason) {
+                    const reason = document.createElement("p");
+                    reason.className = "task-response-text";
+                    reason.textContent = note.reason;
+                    card.append(reason);
+                }
                 if (note.action === "rescheduled") {
                     const schedule = document.createElement("p");
                     schedule.className = "task-due";
@@ -2172,8 +2185,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 : rescheduled ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i>'
                     : '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
             feedbackTitle.textContent = accepted ? "Task accepted!" : rescheduled ? "Task rescheduled" : "Task declined";
-            feedbackMessage.textContent = `Your explanation was sent to ${nameOf(feedback.recipientId)} in Task responses.`
-                + (accepted ? ` ${feedback.task.title} is now in Your Tasks.` : "");
+            const recipient = nameOf(feedback.recipientId);
+            feedbackMessage.textContent = accepted
+                ? `Your acceptance was sent to ${recipient} in Task responses. ${feedback.task.title} is now in Your Tasks.`
+                : `Your explanation was sent to ${recipient} in Task responses.`;
             feedbackTaskCard.replaceChildren(createTaskSummary({
                 ...feedback.task,
                 status: accepted ? "accepted" : rescheduled ? "requested" : "rejected"

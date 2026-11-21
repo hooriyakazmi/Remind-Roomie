@@ -50,20 +50,23 @@ async function openTaskPage(page, actor = 'bob') {
   await expect.poll(() => page.evaluate(() => window.roomieAppState)).toBe('ready');
 }
 
-test('accepting requires an explanation and delivers it to the assigner', async ({ context, page }) => {
+test('accepting sends a confirmation without an explanation', async ({ context, page }) => {
   const backend = await taskBackend(context);
   const assigner = await context.newPage();
   await openTaskPage(assigner, 'alice');
   await openTaskPage(page);
+  await page.getByRole('button', { name:'Reject', exact:true }).click();
+  await page.getByLabel('Why are you rejecting this task?').fill('Draft from another action.');
   await page.getByRole('button', { name:'Accept', exact:true }).click();
-  const reason = page.getByLabel('Why are you accepting this task?');
-  await expect(reason).toBeVisible();
-  await reason.fill('I can take care of it.');
-  await page.getByRole('button', { name:'Send acceptance' }).click();
+  await expect(page.locator('.task-response-form textarea')).toHaveCount(0);
+  const send = page.getByRole('button', { name:'Send acceptance' });
+  await expect(send).toBeFocused();
+  await send.click();
   await expect(page.locator('#taskFeedbackTitle')).toHaveText('Task accepted!');
   await expect(page.locator('#taskFeedbackMessage')).toContainText('sent to Alice');
   await expect(assigner.locator('#taskResponses')).toContainText('Bob accepted “Wash dishes”');
-  await expect(assigner.locator('#taskResponses .task-response-text')).toHaveText('I can take care of it.');
+  await expect(assigner.locator('#taskResponses .task-response-text')).toHaveCount(0);
+  expect(backend.task.responses['response-1'].reason).toBe('');
   expect(backend.task.status).toBe('accepted');
 });
 

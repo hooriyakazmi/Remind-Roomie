@@ -24,6 +24,46 @@ service cloud.firestore {
         && get(profilePath(request.auth.uid)).data.householdId == householdId;
     }
 
+    function validMessage(data) {
+      return data.keys().hasOnly(['senderId', 'text', 'createdAt'])
+        && data.senderId == request.auth.uid
+        && data.createdAt == request.time
+        && data.text is string
+        && data.text.size() <= 1000
+        && data.text.matches('(?s).*\\S.*');
+    }
+
+    function chatMemberMatches(householdId, ids, index) {
+      return index >= ids.size()
+        || (ids[index] is string && get(profilePath(ids[index])).data.householdId == householdId);
+    }
+
+    function validChatMembers(householdId, ids) {
+      return ids is list && ids.size() <= 10 && ids.toSet().size() == ids.size()
+        && request.auth.uid in ids
+        && chatMemberMatches(householdId, ids, 0) && chatMemberMatches(householdId, ids, 1)
+        && chatMemberMatches(householdId, ids, 2) && chatMemberMatches(householdId, ids, 3)
+        && chatMemberMatches(householdId, ids, 4) && chatMemberMatches(householdId, ids, 5)
+        && chatMemberMatches(householdId, ids, 6) && chatMemberMatches(householdId, ids, 7)
+        && chatMemberMatches(householdId, ids, 8) && chatMemberMatches(householdId, ids, 9);
+    }
+
+    function validChat(householdId, chatId, data) {
+      let ids = data.memberIds;
+      return data.createdBy == request.auth.uid && data.createdAt == request.time
+        && validChatMembers(householdId, ids)
+        && (
+          (data.type == 'direct' && ids.size() == 2
+            && data.keys().hasOnly(['type', 'memberIds', 'createdBy', 'createdAt'])
+            && ids[0] < ids[1]
+            && chatId == 'dm_' + string(ids[0].size()) + '_' + ids[0] + ids[1])
+          || (data.type == 'group' && ids.size() >= 3
+            && data.keys().hasOnly(['type', 'memberIds', 'name', 'createdBy', 'createdAt'])
+            && !chatId.matches('dm_.*')
+            && data.name is string && data.name.size() <= 60 && data.name.matches('(?s).*\\S.*'))
+        );
+    }
+
     function profileHasRequiredFields(data) {
       return data.keys().hasAll(['email', 'displayName', 'householdId'])
         && data.keys().hasOnly(['email', 'displayName', 'householdId', 'invitationId', 'color', 'previousNames'])
@@ -140,6 +180,28 @@ service cloud.firestore {
           && request.resource.data.createdBy == resource.data.createdBy;
         allow delete: if isMember(householdId)
           && resource.data.createdBy == request.auth.uid;
+      }
+
+      match /messages/{messageId} {
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId) && validMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /chats/{chatId} {
+        allow read: if isMember(householdId) && request.auth.uid in resource.data.memberIds;
+        allow create: if signedIn() && validChat(householdId, chatId, request.resource.data);
+        allow update, delete: if false;
+
+        match /messages/{messageId} {
+          function canAccessChat() {
+            return isMember(householdId) && request.auth.uid in
+              get(/databases/$(database)/documents/households/$(householdId)/chats/$(chatId)).data.memberIds;
+          }
+          allow read: if canAccessChat();
+          allow create: if canAccessChat() && validMessage(request.resource.data);
+          allow update, delete: if false;
+        }
       }
 
       match /invitations/{invitationId} {

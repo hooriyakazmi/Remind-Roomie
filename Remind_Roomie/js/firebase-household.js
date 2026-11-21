@@ -1,10 +1,13 @@
 import { auth, db } from "./firebase-config.js";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -195,6 +198,61 @@ export function createHouseholdCloud(householdId, user, onError) {
   cloud.updateEvent = (eventId, changes) => updateHouseholdEvent(householdId, eventId, changes);
   cloud.deleteEvent = eventId => deleteHouseholdEvent(householdId, eventId);
   cloud.updateProfile = changes => updateMyProfile(user, changes);
+  const chats = collection(db, "households", householdId, "chats");
+  const messageCollection = chatId => chatId
+    ? collection(db, "households", householdId, "chats", chatId, "messages")
+    : collection(db, "households", householdId, "messages");
+  cloud.watchChats = (callback, onChatError) => onSnapshot(
+    query(chats, where("memberIds", "array-contains", user.uid)),
+    snapshot => callback(snapshot.docs.map(chat => ({ ...chat.data(), id: chat.id }))),
+    onChatError
+  );
+  cloud.createChat = async (type, recipients, title = "") => {
+    const memberIds = [...new Set([user.uid, ...recipients])].sort();
+    const details = { type, memberIds, createdBy: user.uid, createdAt: serverTimestamp() };
+    if (type === "group") {
+      const name = title.trim();
+      if (!name || name.length > 60 || memberIds.length < 3 || memberIds.length > 10) {
+        throw new Error("Give your group a name and choose 2 to 9 other members.");
+      }
+      const ref = await addDoc(chats, { ...details, name });
+      return { ...details, name, id: ref.id };
+    }
+    if (type !== "direct" || memberIds.length !== 2) {
+      throw new Error("Choose one member to message.");
+    }
+    const [first, second] = memberIds;
+    const id = `dm_${Array.from(first).length}_${first}${second}`;
+    const ref = doc(db, "households", householdId, "chats", id);
+    try {
+      await setDoc(ref, details);
+      return { ...details, id };
+    } catch (error) {
+      if (error.code !== "permission-denied") throw error;
+      // If both people start the same chat, the first create wins.
+      const existing = await getDoc(ref);
+      if (!existing.exists()) throw error;
+      return { ...existing.data(), id };
+    }
+  };
+  cloud.watchMessages = (chatId, count, callback, onMessageError) => {
+    const messages = messageCollection(chatId);
+    const recent = query(messages, orderBy("createdAt", "desc"), limit(count));
+    return onSnapshot(recent, snapshot => {
+      callback(snapshot.docs.map(message => ({ ...message.data(), id: message.id })).reverse());
+    }, onMessageError);
+  };
+  cloud.sendMessage = async (chatId, text) => {
+    const message = text.trim();
+    if (!message || message.length > 1000) {
+      throw new Error("Enter a message between 1 and 1,000 characters.");
+    }
+    await addDoc(messageCollection(chatId), {
+      senderId: user.uid,
+      text: message,
+      createdAt: serverTimestamp()
+    });
+  };
 
   // Resolves with the first member list, so pages don't draw before colors are known
   cloud.membersReady = new Promise(resolve => {
