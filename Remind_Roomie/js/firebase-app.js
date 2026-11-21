@@ -2,7 +2,7 @@ import { auth, db } from "./firebase-config.js";
 import { createHouseholdCloud } from "./firebase-household.js";
 import { offerLegacyImport, syncAccountCalendar } from "./legacy-import.js";
 import { onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
+import { doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
 function reportError(error) {
   console.error("Could not synchronize household data.", error);
@@ -45,7 +45,8 @@ window.roomieHouseholdReady = new Promise(resolve => {
       return;
     }
     try {
-      const profileSnapshot = await getDoc(doc(db, "users", user.uid));
+      const profileRef = doc(db, "users", user.uid);
+      const profileSnapshot = await getDoc(profileRef);
       if (currentGeneration !== generation) return;
       const profile = profileSnapshot.data();
       if (!profileSnapshot.exists() || typeof profile?.householdId !== "string" || !profile.householdId) {
@@ -68,7 +69,16 @@ window.roomieHouseholdReady = new Promise(resolve => {
       data.family = [{ id: user.uid, name, role: "You", initials: data.user.initials }];
       data.tasks = [];
       data.calendar = { personal: [], housemates: [], shared: [] };
-      window.roomieCloud = createHouseholdCloud(profile.householdId, user, reportError);
+      const cloud = createHouseholdCloud(profile.householdId, user, reportError, householdSnapshot.data().createdBy);
+      window.roomieCloud = cloud;
+      cloud.stop.push(onSnapshot(profileRef, { includeMetadataChanges: true }, snapshot => {
+        if (currentGeneration !== generation || snapshot.metadata.fromCache ||
+            snapshot.data()?.householdId === cloud.householdId) return;
+        generation++;
+        stopCloud();
+        resolve(null);
+        window.location.replace("login.html");
+      }, reportError));
       const accountName = document.getElementById("accountName");
       if (accountName) accountName.textContent = name;
       try {

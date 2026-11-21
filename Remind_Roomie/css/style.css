@@ -123,6 +123,7 @@ button {
 }
 
 .notification-button {
+    position: relative;
     width: 40px;
     height: 40px;
     border: none;
@@ -130,6 +131,96 @@ button {
     background-color: #357266;
     color: white;
     font-size: 24px;
+}
+
+.notification-badge:not([hidden]) {
+    position: absolute;
+    top: -5px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border: 2px solid #f4f1f1;
+    border-radius: 12px;
+    background: #b2e6ef;
+    color: #24423b;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cal-modal-card.notification-dialog {
+    width: calc(100% - 36px);
+    max-width: 405px;
+    max-height: 75dvh;
+    margin: auto;
+    border: 0;
+}
+
+.notification-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.notification-dialog .notification-header h2 {
+    margin: 0;
+}
+
+.notification-list {
+    list-style: none;
+}
+
+.notification-list li {
+    padding: 11px 0;
+    border-top: var(--roomie-card-border);
+    overflow-wrap: anywhere;
+}
+
+.notification-list time {
+    color: #52635d;
+    font-size: 12px;
+}
+
+.notification-reminders {
+    margin-top: 12px;
+}
+
+.notification-reminders h3 {
+    margin-bottom: 7px;
+    font-size: 15px;
+}
+
+.notification-reminders li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+    align-items: start;
+}
+
+.notification-reminders a {
+    grid-column: 1;
+    color: #17675b;
+    font-weight: 700;
+}
+
+.notification-reminder-date {
+    grid-column: 1;
+    color: #52635d;
+    font-size: 12px;
+}
+
+.notification-reminders .overdue {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
 }
 
 .progress-card {
@@ -511,6 +602,10 @@ button {
     color: #000000;
 }
 
+.status.overdue[hidden] {
+    display: none;
+}
+
 .task-notifications,
 .task-history {
     margin-bottom: 14px;
@@ -600,6 +695,11 @@ button {
 .task-detail-completion {
     width: 100%;
     margin-top: 12px;
+}
+
+.task-detail-delete {
+    background: #f9eaea;
+    color: #9c2f2f;
 }
 
 .reject-task {
@@ -878,6 +978,11 @@ button {
 #familyList .task-avatar {
     background-color: var(--member-profile-color, #e7d9f5);
     overflow: hidden;
+}
+
+#familyList .task-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 #familyList .task-avatar img {
@@ -1528,6 +1633,14 @@ button {
     color: #17675b;
 }
 
+.cal-edit-button-labeled {
+    width: auto;
+    padding: 0 12px;
+    border-radius: 18px;
+    color: #9c2f2f;
+    font-weight: 700;
+}
+
 .cal-hero-body {
     display: flex;
     align-items: center;
@@ -1764,6 +1877,49 @@ button {
 
 .cal-modal-card .cal-form-actions {
     margin-top: 18px;
+}
+
+.task-dialog,
+.family-remove-dialog {
+    width: calc(100% - 40px);
+    max-height: calc(100% - 40px);
+    margin: auto;
+    border: 0;
+}
+
+:is(.task-dialog, .family-remove-dialog)::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.task-dialog :is(input, textarea):focus-visible {
+    outline: 2px solid #337c6e;
+    outline-offset: 2px;
+}
+
+.task-edit-assignees {
+    min-width: 0;
+    padding: 10px 0 0;
+    border: 0;
+}
+
+.task-edit-assignees legend {
+    color: #555;
+    font-size: 12px;
+}
+
+.cal-modal-card .cal-delete-error {
+    margin-top: 8px;
+    color: #9c2f2f;
+}
+
+.cal-modal-card button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.family-remove-member {
+    flex-shrink: 0;
+    border-color: #9c2f2f;
 }
 
 .cal-danger {

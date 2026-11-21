@@ -1,10 +1,28 @@
 const { test, expect } = require('@playwright/test');
 
-async function taskBackend(context) {
+async function taskBackend(context, initial = {}, otherTasks = []) {
   let fail = false;
   let calls = 0;
-  const task = { id: 'one', title: 'Wash dishes', assignedTo: 'Bob', memberIds: ['bob'], assignedBy: 'Alice', assignedById: 'alice', date: '2030-03-10', time: '10:00', dueDate: '2030-03-10', status: 'requested', completed: false, _remote: true, responses: {} };
-  await context.exposeFunction('__readTask', () => task);
+  const task = { id: 'one', title: 'Wash dishes', assignedTo: 'Bob', memberIds: ['bob'], assignedBy: 'Alice', assignedById: 'alice', date: '2030-03-10', time: '10:00', dueDate: '2030-03-10', status: 'requested', completed: false, _remote: true, responses: {}, ...initial };
+  let deleted = false;
+  await context.exposeFunction('__readTasks', () => deleted ? otherTasks : [task, ...otherTasks]);
+  await context.exposeFunction('__deleteTask', (actor, id) => {
+    if (fail) throw new Error('Connection lost.');
+    if (id !== task.id || !(actor === task.assignedById || task.completed || task.status === 'completed')) {
+      throw new Error('Task cannot be deleted by this account.');
+    }
+    deleted = true;
+  });
+  await context.exposeFunction('__editCreatedTask', (actor, id, changes) => {
+    if (deleted || actor !== task.assignedById || id !== task.id) throw new Error('Only the creator can edit this task.');
+    Object.assign(task, changes);
+  });
+  await context.exposeFunction('__updateTask', (id, changes) => {
+    if (id !== task.id || deleted) throw new Error('Task not found.');
+    Object.assign(task, changes);
+    task.completed = task.status === 'completed';
+    return task;
+  });
   await context.exposeFunction('__respond', (senderId, taskId, response) => {
     calls++;
     if (fail) throw new Error('Connection lost.');
@@ -24,15 +42,55 @@ async function taskBackend(context) {
     window.householdData.family = members;
     window.householdData.calendar = {personal:[],housemates:[],shared:[]};
     window.roomieCloud = {
-      user:{uid:actorId},householdId:'test-home',members,membersReady:Promise.resolve(),events:[],tasks:[await window.__readTask()],
+      user:{uid:actorId},householdId:'test-home',members,membersReady:Promise.resolve(),events:[],tasks:await window.__readTasks(),stop:[],
+      updateTask:async (taskId, changes) => {
+        const updated = await window.__updateTask(taskId, changes);
+        if (changes.status === 'completed' && updated.assignedById !== actorId) {
+          localStorage.setItem('roomieNotices:' + updated.assignedById, JSON.stringify([{
+            id: 'done', title: updated.title, senderId: actorId, createdAt: Date.now(), read: false
+          }]));
+        }
+        await refreshTasks();
+      },
+      watchNotifications(_count, callback) {
+        function sync() {
+          const stored = JSON.parse(localStorage.getItem('roomieNotices:' + actorId) || '[]');
+          callback(stored.map(item => ({ ...item, createdAt: { toDate: () => new Date(item.createdAt) } })));
+        }
+        sync();
+        window.addEventListener('storage', sync);
+        window.addEventListener('test:notifications-updated', sync);
+        return () => {
+          window.removeEventListener('storage', sync);
+          window.removeEventListener('test:notifications-updated', sync);
+        };
+      },
+      async markNotificationsRead(ids) {
+        const key = 'roomieNotices:' + actorId;
+        const items = JSON.parse(localStorage.getItem(key) || '[]');
+        localStorage.setItem(key, JSON.stringify(items.map(item => ids.includes(item.id) ? {...item, read:true} : item)));
+        window.dispatchEvent(new Event('test:notifications-updated'));
+      },
+      isTaskCreator: task => task.assignedById === actorId,
+      deleteTask:async taskId => {
+        await window.__deleteTask(actorId, taskId);
+        await refreshTasks();
+      },
+      editCreatedTask:async (taskId, changes) => {
+        await window.__editCreatedTask(actorId, taskId, changes);
+        await refreshTasks();
+      },
       respondToTask:async (taskId,response) => {
         const result = await window.__respond(actorId,taskId,response);
-        const tasks = [await window.__readTask()];
-        applyTasks(tasks);
-        localStorage.setItem('roomieTestTasks', JSON.stringify(tasks));
+        await refreshTasks();
         return result;
       }
     };
+    async function refreshTasks() {
+      const tasks = await window.__readTasks();
+      applyTasks(tasks);
+      localStorage.setItem('roomieTestTasks', JSON.stringify(tasks));
+    }
     function applyTasks(tasks) {
       window.roomieCloud.tasks = tasks;
       window.householdData.tasks = tasks;
@@ -49,6 +107,117 @@ async function openTaskPage(page, actor = 'bob') {
   await page.goto('/tasks.html?as=' + actor);
   await expect.poll(() => page.evaluate(() => window.roomieAppState)).toBe('ready');
 }
+
+test.describe('task reminders in local time', () => {
+  test.use({ timezoneId: 'America/Chicago' });
+
+  test('the bell shows unfinished assignments and flags them overdue at their due time', async ({ context, page }) => {
+    const date = '2026-11-21';
+    const assigned = { status: 'accepted', date, dueDate: date, memberIds: ['bob'], assignedById: 'alice' };
+    await taskBackend(context, { ...assigned, title: 'wash', time: '12:27' }, [
+      { ...assigned, id: 'tub', title: 'clean tub', time: '17:30' },
+      { ...assigned, id: 'date-only', title: 'Sweep', time: '' }
+    ]);
+    await page.clock.install({ time: new Date('2026-11-21T12:26:00-06:00') });
+    await openTaskPage(page);
+    const wash = page.locator('#yourTasks').getByRole('button', { name: 'View task details: wash', exact: true });
+    await expect(wash.getByText('Overdue')).toBeHidden();
+    await page.clock.fastForward(90_000);
+    await expect(wash.getByText('Overdue')).toBeVisible();
+    await expect(page.locator('#yourTasks').getByRole('button', { name: 'View task details: Sweep' }).getByText('Overdue')).toBeHidden();
+
+    await page.goto('/index.html?as=bob');
+    await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+    const reminders = page.getByRole('region', { name: 'Tasks to do' });
+    const tub = reminders.getByRole('link', { name: 'clean tub' });
+    await expect(tub).toBeVisible();
+    await expect(tub.locator('..').getByText('Overdue')).toBeHidden();
+    await expect(reminders.getByRole('link', { name: 'wash' }).locator('..').getByText('Overdue')).toBeVisible();
+    await tub.click();
+    await expect(page.getByRole('heading', { name: 'clean tub', exact: true })).toBeVisible();
+  });
+});
+
+test('completing a task updates the assigner’s Home bell and opening it marks the notice as read', async ({ context, page }) => {
+  await taskBackend(context, { status: 'accepted' });
+  const assigner = await context.newPage();
+  const otherMember = await context.newPage();
+  await assigner.goto('/index.html?as=alice');
+  await otherMember.goto('/index.html?as=carol');
+  await openTaskPage(page);
+
+  await page.getByRole('button', { name: 'View task details: Wash dishes' }).click();
+  await page.getByRole('button', { name: 'Mark as complete' }).click();
+  const unreadBell = assigner.getByRole('button', { name: 'Notifications (1 unread)', exact: true });
+  await expect(unreadBell).toBeVisible();
+  await otherMember.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await expect(otherMember.getByRole('dialog')).toContainText('No notifications yet.');
+
+  await unreadBell.click();
+  const notifications = assigner.getByRole('dialog', { name: 'Notifications' });
+  await expect(notifications).toContainText('Bob completed “Wash dishes”.');
+  await notifications.getByRole('button', { name: 'Close' }).click();
+  await expect(assigner.getByRole('button', { name: 'Notifications', exact: true })).toBeVisible();
+  await assigner.reload();
+  await assigner.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await expect(notifications).toContainText('Bob completed “Wash dishes”.');
+});
+
+test('a completed task can be deleted from Past Tasks after confirmation', async ({ context, page }) => {
+  const backend = await taskBackend(context, { status: 'completed', completed: true, date: '2020-11-12', dueDate: '2020-11-12' });
+  const roommate = await context.newPage();
+  await openTaskPage(page);
+  await openTaskPage(roommate, 'alice');
+  await page.getByRole('button', { name: 'Past Tasks' }).click();
+  await roommate.getByRole('button', { name: 'Past Tasks' }).click();
+  await page.getByRole('button', { name: 'View task details: Wash dishes' }).click();
+  const remove = page.getByRole('button', { name: 'Delete task' });
+  await remove.click();
+  const confirmation = page.getByRole('dialog', { name: 'Delete task?' });
+  await confirmation.getByRole('button', { name: 'Cancel' }).click();
+  await expect(remove).toBeVisible();
+  await expect(roommate.locator('#pastTasks')).toContainText('Wash dishes');
+  backend.fail = true;
+  await remove.click();
+  await confirmation.getByRole('button', { name: 'Delete task' }).click();
+  await expect(confirmation.getByRole('alert')).toContainText('Could not delete this task');
+  backend.fail = false;
+  await confirmation.getByRole('button', { name: 'Delete task' }).click();
+  await expect(page.locator('#pastTasks')).not.toContainText('Wash dishes');
+  await expect(roommate.locator('#pastTasks')).not.toContainText('Wash dishes');
+  await page.reload();
+  await page.getByRole('button', { name: 'Past Tasks' }).click();
+  await expect(page.locator('#pastTasks')).toHaveText('No completed past-due tasks yet.');
+});
+
+test('the creator can edit and delete an unfinished task assigned to another member', async ({ context, page }) => {
+  await taskBackend(context);
+  const assignee = await context.newPage();
+  await openTaskPage(page, 'alice');
+  await openTaskPage(assignee);
+  await page.getByRole('button', { name: 'All Tasks' }).click();
+  await page.getByRole('button', { name: 'View task details: Wash dishes' }).click();
+  await assignee.getByRole('button', { name: 'View task details: Wash dishes' }).click();
+  await expect(assignee.getByRole('button', { name: 'Edit task' })).toHaveCount(0);
+  await expect(assignee.getByRole('button', { name: 'Delete task' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Edit task' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(edit.getByRole('checkbox', { name: 'Bob' })).toBeChecked();
+  await expect(edit.getByLabel('Due date')).toHaveValue('2030-03-10');
+  await edit.getByLabel('Task name').fill('Clear the dishes');
+  await edit.getByLabel('Details').fill('Empty the dishwasher first.');
+  await edit.getByLabel('Due date').fill('2030-03-12');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Clear the dishes' })).toBeVisible();
+  await expect(assignee.getByRole('heading', { name: 'Clear the dishes' })).toBeVisible();
+  await expect(assignee.locator('#taskDetailCard')).toContainText('Empty the dishwasher first.');
+
+  await page.getByRole('button', { name: 'Delete task' }).click();
+  await page.getByRole('dialog', { name: 'Delete task?' }).getByRole('button', { name: 'Delete task' }).click();
+  await expect(assignee.locator('#taskDetailView')).toBeHidden();
+  await expect(page.locator('#allTasks')).not.toContainText('Clear the dishes');
+});
 
 test('accepting sends a confirmation without an explanation', async ({ context, page }) => {
   const backend = await taskBackend(context);

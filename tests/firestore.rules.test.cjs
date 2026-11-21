@@ -232,6 +232,54 @@ test('valid invitation and profile transition succeed atomically, then cannot be
   await assertFails(updateDoc(doc(db, 'users/bob'), { householdId: 'other' }));
 });
 
+test('only the household head can remove a member and a fresh invitation is required to rejoin', async () => {
+  const alice = client('alice');
+  const bob = client('bob');
+  await createInvite();
+  await assertSucceeds(join(bob));
+  await createInvite('STALE');
+  await seed({
+    'users/cara': profile('cara', 'home'),
+    'households/home/tasks/task': task(),
+    'households/home/events/event': event(),
+    'households/home/messages/hello': { senderId: 'alice', text: 'Hi', createdAt: serverTimestamp() },
+    'households/home/chats/dm_5_alicebob': { memberIds: ['alice', 'bob'] },
+    'households/home/chats/dm_5_alicebob/messages/hello': { senderId: 'alice', text: 'Private' }
+  });
+  const member = (db, uid) => doc(db, 'users', uid);
+  const marker = (db, uid) => doc(member(db, uid), 'householdRemovals', 'home');
+  const removal = { householdId: null, invitationId: deleteField() };
+  function remove(db, uid, extra = {}) {
+    const batch = writeBatch(db);
+    batch.update(member(db, uid), { ...removal, ...extra });
+    batch.set(marker(db, uid), { removedAt: serverTimestamp() });
+    return batch.commit();
+  }
+
+  await assertFails(remove(bob, 'cara'));
+  await assertFails(remove(client('eve'), 'bob'));
+  await assertFails(remove(alice, 'alice'));
+  await assertFails(remove(alice, 'bob', { displayName: 'Rewritten' }));
+  await assertFails(updateDoc(member(alice, 'bob'), removal));
+  await assertFails(setDoc(marker(alice, 'bob'), { removedAt: serverTimestamp() }));
+  await assertSucceeds(remove(alice, 'bob'));
+
+  const profileAfter = (await assertSucceeds(getDoc(member(bob, 'bob')))).data();
+  assert.deepEqual(profileAfter, profile('bob'));
+  await assertSucceeds(updateDoc(member(bob, 'bob'), { displayName: 'Bobby' }));
+  await assertFails(getDoc(member(alice, 'bob')));
+  assert.equal((await assertSucceeds(getDocs(query(collection(alice, 'users'), where('householdId', '==', 'home'))))).size, 2);
+  await assertFails(getDoc(doc(bob, 'households/home')));
+  await assertFails(getDoc(taskRef(bob)));
+  await assertFails(getDoc(eventRef(bob)));
+  await assertFails(getDoc(doc(bob, 'households/home/messages/hello')));
+  await assertFails(getDoc(doc(bob, 'households/home/chats/dm_5_alicebob/messages/hello')));
+  await assertFails(join(bob));
+  await assertFails(join(bob, { code: 'STALE' }));
+  await createInvite('FRESH');
+  await assertSucceeds(join(bob, { code: 'FRESH' }));
+});
+
 test('membership without invitation or with a missing, pending, wrong-email or wrong-household invitation fails', async () => {
   const db = client('bob');
   await createInvite();
@@ -302,6 +350,41 @@ test('profiles and household member queries are restricted to self or current ho
   await assertFails(getDoc(doc(client('bob'), 'households/home')));
   await assertFails(getDocs(collection(db, 'households')));
   await assertFails(updateDoc(doc(db, 'households/home'), { createdBy: 'eve' }));
+});
+
+test('a completion notification is atomically created by an assignee and readable only by the assigner', async () => {
+  await seed({ 'users/bob': profile('bob', 'home'), 'users/cara': profile('cara', 'home') });
+  const alice = client('alice');
+  const bob = client('bob');
+  const cara = client('cara');
+  const notice = (db, uid = 'alice', id = 'completion') => doc(db, 'households', 'home', 'notificationInboxes', uid, 'items', id);
+  const payload = { taskId: 'task', title: 'Trash', senderId: 'bob', createdAt: serverTimestamp(), read: false };
+  await setDoc(taskRef(alice), { ...task(), assignedById: 'alice', status: 'accepted' });
+  function complete(db, { recipient = 'alice', id = 'completion', taskId = 'task', senderId = 'bob', title = 'Trash' } = {}) {
+    const batch = writeBatch(db);
+    batch.update(taskRef(db, 'home', taskId), { status: 'completed', completed: true, completionNoticeId: id });
+    batch.set(notice(db, recipient, id), { ...payload, taskId, senderId, title });
+    return batch.commit();
+  }
+
+  await assertFails(setDoc(notice(bob), payload));
+  await assertFails(complete(cara, { senderId: 'cara' }));
+  await assertFails(complete(bob, { recipient: 'cara' }));
+  await assertFails(complete(bob, { title: 'Forged title' }));
+  await assertSucceeds(complete(bob));
+  await assertFails(complete(bob, { id: 'duplicate' }));
+  await assertFails(getDoc(notice(bob)));
+  await assertFails(getDoc(notice(cara)));
+  assert.equal((await assertSucceeds(getDoc(notice(alice)))).data().read, false);
+  await assertFails(updateDoc(notice(bob), { read: true }));
+  await assertFails(updateDoc(notice(alice), { read: true, title: 'Changed' }));
+  await assertSucceeds(updateDoc(notice(alice), { read: true }));
+  await assertSucceeds(updateDoc(notice(alice), { read: true }));
+  await assertSucceeds(deleteDoc(taskRef(alice)));
+  assert.equal((await assertSucceeds(getDoc(notice(alice)))).data().read, true);
+
+  await setDoc(taskRef(alice, 'home', 'legacy'), { ...task(), assignedBy: 'alice', assignedTo: 'cara, bob', memberIds: null, completed: null, status: 'accepted' });
+  await assertSucceeds(complete(bob, { id: 'legacy', taskId: 'legacy' }));
 });
 
 test('task CRUD, queries, acceptance, rejection, scheduling, and completion match firebase-tasks.js', async () => {

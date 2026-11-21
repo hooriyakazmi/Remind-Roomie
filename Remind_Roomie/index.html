@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Home</title>
-    <link rel="stylesheet" href="css/style.css?v=20261121-messages-1">
+    <link rel="stylesheet" href="css/style.css?v=20261121-task-reminders-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -24,11 +24,26 @@
                 <i class="fa-solid fa-chevron-right profile-chevron" aria-hidden="true"></i>
             </a>
 
-            <button class="notification-button" aria-label="Notifications">
-                <i class="fa-regular fa-bell"></i>
+            <button class="notification-button" id="notificationButton" type="button" aria-label="Notifications" aria-haspopup="dialog" aria-controls="notificationDialog" disabled>
+                <i class="fa-regular fa-bell" aria-hidden="true"></i>
+                <span class="notification-badge" id="notificationBadge" aria-hidden="true" hidden></span>
             </button>
         </header>
 
+        <dialog class="cal-modal-card notification-dialog" id="notificationDialog" aria-labelledby="notificationTitle">
+            <div class="notification-header">
+                <h2 id="notificationTitle">Notifications</h2>
+                <form method="dialog">
+                    <button class="secondary-button" type="submit">Close</button>
+                </form>
+            </div>
+            <p id="notificationStatus" role="status">Loading notifications…</p>
+            <ul class="notification-list" id="notificationList"></ul>
+            <section class="notification-reminders" id="notificationReminders" aria-labelledby="notificationRemindersTitle" hidden>
+                <h3 id="notificationRemindersTitle">Tasks to do</h3>
+                <ul class="notification-list" id="notificationReminderList"></ul>
+            </section>
+        </dialog>
 
         <!-- Today's Progress -->
         <section class="progress-card">
@@ -132,7 +147,7 @@
     <!-- JavaScript Files -->
     <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
     <script src="js/data.js?v=20261108-addbtn-1"></script>
-    <script src="js/script.js?v=20261108-home-event-detail-1"></script>
+    <script src="js/script.js?v=20261121-task-reminders-1"></script>
 
 </body>
 </html>

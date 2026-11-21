@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remind Roomie - Calendar</title>
-    <link rel="stylesheet" href="css/style.css?v=20261109-past-events-dropdown-1">
+    <link rel="stylesheet" href="css/style.css?v=20261121-delete-completed-1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 
@@ -237,6 +237,7 @@
         <div class="cal-modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
             <h2 id="deleteModalTitle">Delete event?</h2>
             <p id="deleteModalText"></p>
+            <p class="cal-delete-error" id="deleteEventError" role="alert" hidden></p>
             <div class="cal-form-actions">
                 <button type="button" class="secondary-button" id="cancelDelete">Cancel</button>
                 <button type="button" class="primary-button cal-danger" id="confirmDelete">Delete</button>
@@ -278,7 +279,7 @@
 
     <script src="js/form-controls.js?v=20261108-addbtn-1"></script>
     <script src="js/data.js?v=20261108-addbtn-1"></script>
-    <script src="js/script.js?v=20261109-past-events-dropdown-1"></script>
+    <script src="js/script.js?v=20261121-delete-completed-1"></script>
 
 </body>
 </html>

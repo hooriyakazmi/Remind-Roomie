@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   limit,
@@ -17,7 +18,7 @@ import {
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 import { createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
-import { addTask, listenToTasks, updateTask, respondToTask } from "./firebase-tasks.js";
+import { addTask, completeTask, deleteTask, editCreatedTask, listenToTasks, taskCreatorId, updateTask, respondToTask } from "./firebase-tasks.js";
 
 // Create the required profile only after Firebase Authentication creates the account.
 export async function signUp(email, password, displayName) {
@@ -78,6 +79,18 @@ export async function joinHousehold(householdId, code, user) {
   batch.update(doc(db, "users", user.uid), {
     householdId,
     invitationId: normalizedCode
+  });
+  await batch.commit();
+}
+
+async function removeHouseholdMember(householdId, memberId) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", memberId), {
+    householdId: null,
+    invitationId: deleteField()
+  });
+  batch.set(doc(db, "users", memberId, "householdRemovals", householdId), {
+    removedAt: serverTimestamp()
   });
   await batch.commit();
 }
@@ -187,17 +200,34 @@ export async function deleteHouseholdEvent(householdId, eventId) {
 }
 
 // Provide the existing pages a small integration surface instead of replacing their renderers.
-export function createHouseholdCloud(householdId, user, onError) {
-  const cloud = { householdId, user, tasks: [], events: [], members: [], reportError: onError };
+export function createHouseholdCloud(householdId, user, onError, headId) {
+  const cloud = { householdId, headId, user, tasks: [], events: [], members: [], reportError: onError };
   cloud.createInvitation = email => createHouseholdInvitation(householdId, email);
+  cloud.removeMember = memberId => removeHouseholdMember(householdId, memberId);
   cloud.addTask = (title, assignedTo, dueDate, details) =>
     addTask(householdId, title, assignedTo, dueDate, { ...details, assignedById: user.uid });
-  cloud.updateTask = (taskId, changes) => updateTask(householdId, taskId, changes);
+  cloud.updateTask = (taskId, changes) => changes.status === "completed"
+    ? completeTask(householdId, taskId, user, cloud.members)
+    : updateTask(householdId, taskId, changes);
+  cloud.isTaskCreator = task => taskCreatorId(task, cloud.members) === user.uid;
+  cloud.editCreatedTask = (taskId, changes) => editCreatedTask(householdId, taskId, user, cloud.members, changes);
+  cloud.deleteTask = taskId => deleteTask(householdId, taskId, user, cloud.members);
   cloud.respondToTask = (taskId, response) => respondToTask(householdId, taskId, user, cloud.members, response);
   cloud.addEvent = event => addHouseholdEvent(householdId, event);
   cloud.updateEvent = (eventId, changes) => updateHouseholdEvent(householdId, eventId, changes);
   cloud.deleteEvent = eventId => deleteHouseholdEvent(householdId, eventId);
   cloud.updateProfile = changes => updateMyProfile(user, changes);
+  const inbox = ["households", householdId, "notificationInboxes", user.uid, "items"];
+  cloud.watchNotifications = (count, callback, onInboxError) => onSnapshot(
+    query(collection(db, ...inbox), orderBy("createdAt", "desc"), limit(count)),
+    snapshot => callback(snapshot.docs.map(item => ({ ...item.data(), id: item.id }))),
+    onInboxError
+  );
+  cloud.markNotificationsRead = async ids => {
+    const batch = writeBatch(db);
+    ids.forEach(id => batch.update(doc(db, ...inbox, id), { read: true }));
+    await batch.commit();
+  };
   const chats = collection(db, "households", householdId, "chats");
   const messageCollection = chatId => chatId
     ? collection(db, "households", householdId, "chats", chatId, "messages")
