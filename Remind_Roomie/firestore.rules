@@ -206,6 +206,54 @@ service cloud.firestore {
         allow read, write: if isMember(householdId);
       }
 
+      match /notificationInboxes/{recipientId}/items/{notificationId} {
+        function matchesLegacyAssignee(task) {
+          let profile = get(profilePath(request.auth.uid)).data;
+          let assigned = task.get('assignedTo', '');
+          let names = assigned is list ? assigned : assigned.split('\\s*,\\s*');
+          return names.hasAny([request.auth.uid, profile.displayName, 'Household'].concat(profile.get('previousNames', [])));
+        }
+
+        function matchesAssigner(task) {
+          let id = task.get('assignedById', null);
+          let name = task.get('assignedBy', '');
+          return id != null ? id == recipientId
+            : name == recipientId || matchesLegacyAssigner(name);
+        }
+
+        function matchesLegacyAssigner(name) {
+          let profile = get(profilePath(recipientId)).data;
+          return profile.householdId == householdId
+            && (profile.displayName == name || name in profile.get('previousNames', []));
+        }
+
+        function validCompletionNotice(notice) {
+          let path = /databases/$(database)/documents/households/$(householdId)/tasks/$(notice.taskId);
+          let before = get(path).data;
+          let after = getAfter(path).data;
+          let members = before.get('memberIds', []);
+          return before.status == 'accepted' && before.get('completed', false) != true
+            && (members is list && members.size() > 0 ? request.auth.uid in members : matchesLegacyAssignee(before))
+            && matchesAssigner(before)
+            && after.status == 'completed' && after.completed == true
+            && after.completionNoticeId == notificationId
+            && notice.title == before.title;
+        }
+
+        allow read: if isMember(householdId) && request.auth.uid == recipientId;
+        allow create: if isMember(householdId) && request.auth.uid != recipientId
+          && request.resource.data.keys().hasOnly(['taskId', 'title', 'senderId', 'createdAt', 'read'])
+          && request.resource.data.taskId is string
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.read == false
+          && validCompletionNotice(request.resource.data);
+        allow update: if isMember(householdId) && request.auth.uid == recipientId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow delete: if false;
+      }
+
       match /events/{eventId} {
         allow read: if isMember(householdId);
         allow create: if isMember(householdId)

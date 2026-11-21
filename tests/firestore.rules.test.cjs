@@ -352,6 +352,41 @@ test('profiles and household member queries are restricted to self or current ho
   await assertFails(updateDoc(doc(db, 'households/home'), { createdBy: 'eve' }));
 });
 
+test('a completion notification is atomically created by an assignee and readable only by the assigner', async () => {
+  await seed({ 'users/bob': profile('bob', 'home'), 'users/cara': profile('cara', 'home') });
+  const alice = client('alice');
+  const bob = client('bob');
+  const cara = client('cara');
+  const notice = (db, uid = 'alice', id = 'completion') => doc(db, 'households', 'home', 'notificationInboxes', uid, 'items', id);
+  const payload = { taskId: 'task', title: 'Trash', senderId: 'bob', createdAt: serverTimestamp(), read: false };
+  await setDoc(taskRef(alice), { ...task(), assignedById: 'alice', status: 'accepted' });
+  function complete(db, { recipient = 'alice', id = 'completion', taskId = 'task', senderId = 'bob', title = 'Trash' } = {}) {
+    const batch = writeBatch(db);
+    batch.update(taskRef(db, 'home', taskId), { status: 'completed', completed: true, completionNoticeId: id });
+    batch.set(notice(db, recipient, id), { ...payload, taskId, senderId, title });
+    return batch.commit();
+  }
+
+  await assertFails(setDoc(notice(bob), payload));
+  await assertFails(complete(cara, { senderId: 'cara' }));
+  await assertFails(complete(bob, { recipient: 'cara' }));
+  await assertFails(complete(bob, { title: 'Forged title' }));
+  await assertSucceeds(complete(bob));
+  await assertFails(complete(bob, { id: 'duplicate' }));
+  await assertFails(getDoc(notice(bob)));
+  await assertFails(getDoc(notice(cara)));
+  assert.equal((await assertSucceeds(getDoc(notice(alice)))).data().read, false);
+  await assertFails(updateDoc(notice(bob), { read: true }));
+  await assertFails(updateDoc(notice(alice), { read: true, title: 'Changed' }));
+  await assertSucceeds(updateDoc(notice(alice), { read: true }));
+  await assertSucceeds(updateDoc(notice(alice), { read: true }));
+  await assertSucceeds(deleteDoc(taskRef(alice)));
+  assert.equal((await assertSucceeds(getDoc(notice(alice)))).data().read, true);
+
+  await setDoc(taskRef(alice, 'home', 'legacy'), { ...task(), assignedBy: 'alice', assignedTo: 'cara, bob', memberIds: null, completed: null, status: 'accepted' });
+  await assertSucceeds(complete(bob, { id: 'legacy', taskId: 'legacy' }));
+});
+
 test('task CRUD, queries, acceptance, rejection, scheduling, and completion match firebase-tasks.js', async () => {
   const db = client('alice');
   await assertSucceeds(setDoc(taskRef(db), task()));

@@ -82,6 +82,41 @@ export function taskCreatorId(task, members) {
   return task.assignedById || findTaskMember(members, task.assignedBy)?.id;
 }
 
+function taskIsAssignedTo(task, uid, members) {
+  if (task.memberIds?.length) return task.memberIds.includes(uid);
+  const names = Array.isArray(task.assignedTo) ? task.assignedTo
+    : String(task.assignedTo || "").split(",").map(name => name.trim());
+  return names.includes("Household") || findTaskMember(members, task.assignedTo)?.id === uid
+    || names.some(name => findTaskMember(members, name)?.id === uid);
+}
+
+export async function completeTask(householdId, taskId, user, members) {
+  const ref = doc(db, "households", householdId, "tasks", taskId);
+  const notificationId = crypto.randomUUID();
+  await runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error("This task no longer exists.");
+    const task = snapshot.data();
+    if (task.completed === true || task.status === "completed") return;
+    if (task.status !== "accepted" || !taskIsAssignedTo(task, user.uid, members)) {
+      throw new Error("Only an assignee can complete an accepted task.");
+    }
+    const changes = { status: "completed", completed: true };
+    const recipientId = taskCreatorId(task, members);
+    if (recipientId && recipientId !== user.uid) {
+      changes.completionNoticeId = notificationId;
+      transaction.set(doc(db, "households", householdId, "notificationInboxes", recipientId, "items", notificationId), {
+        taskId,
+        title: task.title,
+        senderId: user.uid,
+        createdAt: serverTimestamp(),
+        read: false
+      });
+    }
+    transaction.update(ref, changes);
+  });
+}
+
 export async function deleteTask(householdId, taskId, user, members) {
   const ref = doc(db, "households", householdId, "tasks", taskId);
   await runTransaction(db, async transaction => {
@@ -158,11 +193,7 @@ export async function respondToTask(householdId, taskId, user, members, response
     if (task.completed || (task.status && task.status !== "requested")) {
       throw new Error("This task has already been answered. Reload to see its current status.");
     }
-    const memberFor = value => findTaskMember(members, value);
-    const assignedNames = Array.isArray(task.assignedTo) ? task.assignedTo : String(task.assignedTo || "").split(",").map(name => name.trim());
-    const assigned = task.memberIds?.length ? task.memberIds.includes(user.uid)
-      : assignedNames.includes("Household") || memberFor(task.assignedTo)?.id === user.uid || assignedNames.some(name => memberFor(name)?.id === user.uid);
-    if (!assigned) throw new Error("Only a person assigned this task can respond to it.");
+    if (!taskIsAssignedTo(task, user.uid, members)) throw new Error("Only a person assigned this task can respond to it.");
     const recipientId = taskCreatorId(task, members);
     if (!recipientId) throw new Error("The person who assigned this task could not be identified. Ask them to assign it again.");
     const recipient = await transaction.get(doc(db, "users", recipientId));

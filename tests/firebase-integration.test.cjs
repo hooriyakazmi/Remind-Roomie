@@ -227,6 +227,36 @@ test('task creators can edit an active task and delete it while other members ca
   assert.equal(fake.stored.has(path), false);
 });
 
+test('finishing a task writes one notification to the assigner and its read state can be saved', async () => {
+  const fake = mockFirestore();
+  const api = await loadModule('firebase-household.js', fake.sdk, {
+    window: { householdData: {} }, crypto: { randomUUID: () => 'finished' }
+  });
+  const taskRef = 'households/home/tasks/task';
+  const inbox = 'households/home/notificationInboxes/alice/items';
+  const notice = inbox + '/finished';
+  fake.stored.set(taskRef, { title: 'Trash', assignedById: 'alice', memberIds: ['bob'], status: 'accepted' });
+  const alice = api.createHouseholdCloud('home', { uid: 'alice' }, () => {});
+  const bob = api.createHouseholdCloud('home', { uid: 'bob' }, () => {});
+  await assert.rejects(alice.updateTask('task', { status: 'completed' }), /Only an assignee/);
+  await bob.updateTask('task', { status: 'completed' });
+  await bob.updateTask('task', { status: 'completed' });
+  assert.equal(fake.stored.get(taskRef).status, 'completed');
+  assert.equal(fake.stored.get(taskRef).completionNoticeId, 'finished');
+  assert.equal(fake.stored.get(notice).senderId, 'bob');
+  assert.equal(fake.stored.get(notice).title, 'Trash');
+  assert.equal(fake.writes.filter(write => write.ref === notice).length, 1);
+  alice.watchNotifications(50, () => {}, () => {});
+  assert.equal(fake.listeners.at(-1).ref.ref, inbox);
+  await alice.markNotificationsRead(['finished']);
+  assert.equal(fake.writes.at(-1).ref, notice);
+  assert.equal(fake.writes.at(-1).data.read, true);
+  fake.stored.set(taskRef, { title: 'Trash', assignedById: 'bob', memberIds: ['bob'], status: 'accepted' });
+  await bob.updateTask('task', { status: 'completed' });
+  assert.equal(fake.stored.get(taskRef).status, 'completed');
+  assert.equal(fake.stored.has('households/home/notificationInboxes/bob/items/finished'), false);
+});
+
 test('accepting a task without an explanation records the response and updates task status atomically', async () => {
   const fake = mockFirestore();
   fake.stored.set('households/home/tasks/one', {

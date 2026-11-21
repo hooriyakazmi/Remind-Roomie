@@ -116,7 +116,16 @@ document.addEventListener("DOMContentLoaded", async function () {
         return `${date.getFullYear()}-${month}-${day}`;
     }
 
-    function taskDueDateTime(task) {
+    function taskClockTime(task) {
+        const match = String(task.time || task.dueTime || "").trim().match(/^(\d{1,2}):([0-5]\d)\s*(AM|PM)?$/i);
+        if (!match) return null;
+        const hours = Number(match[1]);
+        const period = match[3]?.toUpperCase();
+        if (period ? hours < 1 || hours > 12 : hours > 23) return null;
+        return [period ? hours % 12 + (period === "PM" ? 12 : 0) : hours, Number(match[2])];
+    }
+
+    function taskDueDateTime(task, endOfDay = false) {
         const dueDate = task.date || task.dueDate;
         if (!dueDate) {
             return Number.POSITIVE_INFINITY;
@@ -135,10 +144,11 @@ document.addEventListener("DOMContentLoaded", async function () {
             return Number.POSITIVE_INFINITY;
         }
 
-        const time = task.time || task.dueTime || "";
-        const match = String(time).match(/^(\d{1,2}):(\d{2})$/);
-        if (match) {
-            date.setHours(Number(match[1]), Number(match[2]), 0, 0);
+        const time = taskClockTime(task);
+        if (time) {
+            date.setHours(...time, 0, 0);
+        } else if (endOfDay) {
+            date.setHours(24, 0, 0, 0);
         }
         return date.getTime();
     }
@@ -149,6 +159,28 @@ document.addEventListener("DOMContentLoaded", async function () {
         const todayStart = new Date(today);
         todayStart.setHours(0, 0, 0, 0);
         return taskDueDateTime(task) < todayStart.getTime();
+    }
+
+    function appendTaskOverdue(container, task) {
+        if (!["accepted", "requested"].includes(task.status)) return;
+        const deadline = taskDueDateTime(task, true);
+        if (!Number.isFinite(deadline)) return;
+        const badge = document.createElement("span");
+        badge.className = "status overdue";
+        badge.dataset.taskDeadline = String(deadline);
+        badge.textContent = "Overdue";
+        badge.hidden = deadline > Date.now();
+        container.append(badge);
+    }
+
+    function watchTaskDeadlines() {
+        const timer = window.setInterval?.(() => {
+            const now = Date.now();
+            for (const badge of document.querySelectorAll("[data-task-deadline]")) {
+                badge.hidden = Number(badge.dataset.taskDeadline) > now;
+            }
+        }, 30_000);
+        if (timer !== undefined) window.roomieCloud.stop?.push(() => window.clearInterval(timer));
     }
 
     function formatTaskDue(task) {
@@ -175,13 +207,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     function formatTaskDueTime(task) {
         const time = task.time || task.dueTime || "";
-        const match = String(time).match(/^(\d{1,2}):(\d{2})$/);
-        return match
-            ? new Date(`2000-01-01T${time}`).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit"
-            })
-            : String(time);
+        const clock = taskClockTime(task);
+        if (!clock) return String(time);
+        return new Date(2000, 0, 1, ...clock).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit"
+        });
     }
 
     function displayDueDate(task) {
@@ -262,6 +293,110 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     if (homeEvents) {
         const homeTasks = document.getElementById("homeTasks");
+
+        function initNotifications(cloud) {
+            const bell = document.getElementById("notificationButton");
+            const badge = document.getElementById("notificationBadge");
+            const dialog = document.getElementById("notificationDialog");
+            const status = document.getElementById("notificationStatus");
+            const list = document.getElementById("notificationList");
+            const reminders = document.getElementById("notificationReminders");
+            const reminderList = document.getElementById("notificationReminderList");
+            const pendingRead = new Set();
+            let notices = [];
+            let inboxLoaded = false;
+            let inboxError = "";
+
+            function renderReminders() {
+                const assigned = sortTasksByDueDate(cloud.tasks.filter(task =>
+                    assignedToCurrentUser(task) && ["accepted", "requested"].includes(task.status)
+                ));
+                reminders.hidden = assigned.length === 0;
+                reminderList.replaceChildren(...assigned.map(task => {
+                    const item = document.createElement("li");
+                    const link = document.createElement("a");
+                    link.href = `tasks.html?task=${encodeURIComponent(task.id)}`;
+                    link.textContent = task.title;
+                    const due = document.createElement("span");
+                    due.className = "notification-reminder-date";
+                    due.textContent = formatTaskDue(task);
+                    item.append(link, due);
+                    appendTaskOverdue(item, task);
+                    return item;
+                }));
+                status.textContent = inboxError || (inboxLoaded ? "No notifications yet." : "Loading notifications…");
+                status.hidden = !inboxError && inboxLoaded && (assigned.length > 0 || notices.length > 0);
+            }
+
+            function renderNotifications() {
+                const unread = notices.filter(notice => !notice.read).length;
+                badge.textContent = unread;
+                badge.hidden = unread === 0;
+                bell.setAttribute("aria-label", unread ? `Notifications (${unread} unread)` : "Notifications");
+                list.replaceChildren(...notices.map(notice => {
+                    const row = document.createElement("li");
+                    const text = document.createElement("p");
+                    const name = memberFor(notice.senderId)?.name || "A household member";
+                    text.textContent = `${name} completed “${notice.title}”.`;
+                    row.append(text);
+                    const date = notice.createdAt?.toDate();
+                    if (date) {
+                        const time = document.createElement("time");
+                        time.dateTime = date.toISOString();
+                        time.textContent = date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+                        row.append(time);
+                    }
+                    return row;
+                }));
+            }
+
+            async function markVisibleRead() {
+                if (!dialog.open) return;
+                const ids = notices.filter(notice => !notice.read && !pendingRead.has(notice.id)).map(notice => notice.id);
+                if (!ids.length) return;
+                ids.forEach(id => pendingRead.add(id));
+                try {
+                    await cloud.markNotificationsRead(ids);
+                } catch (error) {
+                    console.error("Could not mark notifications as read.", error);
+                    inboxError = "Could not mark notifications as read. Reopen the bell to retry.";
+                    renderReminders();
+                } finally {
+                    ids.forEach(id => pendingRead.delete(id));
+                }
+            }
+
+            bell.addEventListener("click", () => {
+                renderReminders();
+                dialog.showModal();
+                markVisibleRead();
+            });
+            bell.disabled = false;
+            const unsubscribe = cloud.watchNotifications(50, items => {
+                notices = items;
+                inboxLoaded = true;
+                inboxError = "";
+                renderNotifications();
+                renderReminders();
+                markVisibleRead();
+            }, error => {
+                console.error("Could not load task notifications.", error);
+                inboxError = "Could not load completion notifications. Reload to try again.";
+                renderReminders();
+            });
+            renderReminders();
+            window.addEventListener("roomie:tasks-updated", renderReminders);
+            window.addEventListener("roomie:members-updated", renderNotifications);
+            window.addEventListener("roomie:members-updated", renderReminders);
+            cloud.stop.push(() => {
+                unsubscribe();
+                window.removeEventListener("roomie:tasks-updated", renderReminders);
+                window.removeEventListener("roomie:members-updated", renderNotifications);
+                window.removeEventListener("roomie:members-updated", renderReminders);
+            });
+        }
+
+        if (window.roomieCloud.watchNotifications) initNotifications(window.roomieCloud);
 
         // Display user information
         const profileAvatar = document.getElementById("profileAvatar");
@@ -437,13 +572,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.addEventListener("roomie:local-events-updated", renderHomeEvents);
         window.addEventListener("roomie:members-updated", renderHomeEvents);
 
-        const assignedToCurrentUser = task => {
+        function assignedToCurrentUser(task) {
             if (task.memberIds?.length) return task.memberIds.includes(window.roomieCloud.user.uid);
             const assignedNames = Array.isArray(task.assignedTo)
                 ? task.assignedTo
                 : String(task.assignedTo || "").split(",").map(name => name.trim());
             return assignedNames.includes(userName) || assignedNames.includes("Household");
-        };
+        }
         function renderHomeTasks() {
             homeTasks.replaceChildren();
             const tasks = window.roomieCloud.tasks;
@@ -502,6 +637,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 details.append(title, due);
                 details.append(createAttribution(assignedByName(task)));
                 card.append(avatar, details);
+                appendTaskOverdue(card, task);
                 card.tabIndex = 0;
                 card.setAttribute("role", "button");
                 card.setAttribute("aria-label", `View task details: ${task.title}`);
@@ -526,6 +662,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         renderHomeTasks();
+        watchTaskDeadlines();
         window.addEventListener("roomie:tasks-updated", renderHomeTasks);
         window.addEventListener("roomie:members-updated", () => {
             householdData.family = window.roomieCloud.members;
@@ -1890,12 +2027,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             details.append(title, dueText);
             details.append(createAttribution(assignedByName(task), "span"));
 
-            if (task.status !== "completed" && isTaskPastDue(task)) {
-                const overdue = document.createElement("span");
-                overdue.className = "status overdue";
-                overdue.textContent = "Overdue";
-                card.append(overdue);
-            }
+            appendTaskOverdue(card, task);
 
             if (options.allowCompletion && isAssignedToCurrentUser(task) && ["accepted", "completed"].includes(task.status)) {
                 const checkbox = document.createElement("input");
@@ -1942,12 +2074,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             due.className = "task-due roomie-due-date";
             due.textContent = formatTaskDue(task);
 
-            if (task.status !== "completed" && isTaskPastDue(task)) {
-                const overdue = document.createElement("span");
-                overdue.className = "status overdue";
-                overdue.textContent = "Overdue";
-                card.append(overdue);
-            }
+            appendTaskOverdue(card, task);
 
             const actions = document.createElement("div");
             actions.className = "task-request-actions";
@@ -2551,6 +2678,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.addEventListener("roomie:members-updated", loadTasks);
 
         loadTasks();
+        watchTaskDeadlines();
     }
 
 
